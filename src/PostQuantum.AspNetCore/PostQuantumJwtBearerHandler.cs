@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using PostQuantum.AspNetCore.Internal;
 using PostQuantum.Jwt;
 
 namespace PostQuantum.AspNetCore;
@@ -102,29 +103,51 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
         }
         else
         {
-            // No header / wrong scheme → "no result" rather than "fail": lets
-            // other schemes registered on the same request get a shot at it.
+            // No header / wrong scheme / empty token → "no result" rather than
+            // "fail": lets other schemes registered on the same request get a
+            // shot at it. Bearer prefix match is case-insensitive per RFC 6750.
             var authorization = Request.Headers.Authorization.ToString();
-            if (string.IsNullOrEmpty(authorization) ||
-                !authorization.StartsWith(PostQuantumJwtBearerDefaults.BearerPrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                return AuthenticateResult.NoResult();
-            }
-
-            token = authorization[PostQuantumJwtBearerDefaults.BearerPrefix.Length..];
-            if (string.IsNullOrWhiteSpace(token))
+            if (!HeaderEncoding.TryGetBearerToken(authorization, out token))
             {
                 return AuthenticateResult.NoResult();
             }
         }
 
+        using var activity = PostQuantumJwtBearerDiagnostics.ActivitySource.StartActivity(
+            "PostQuantumJwtBearer.Validate",
+            System.Diagnostics.ActivityKind.Internal);
+        activity?.SetTag("scheme", Scheme.Name);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         PqJwtValidationResult result;
         try
         {
             result = Validator.Validate(token);
         }
-        catch (PqJwtValidationException ex)
+        // Fail-closed on ANY exception out of Validate(), not just the
+        // engine's PqJwtException family. The engine wraps most failures,
+        // but adversarial inputs can still leak FormatException (bad
+        // Base64), CryptographicException, etc. — and a security library
+        // must treat all of them as "this token is rejected", not let
+        // them surface as 500s that disclose internals to the attacker.
+        // We deliberately do NOT catch OutOfMemoryException or
+        // StackOverflowException — those are environmental and should
+        // crash the host so an operator notices.
+        catch (Exception ex) when (ex is not (OutOfMemoryException or StackOverflowException))
         {
+            stopwatch.Stop();
+            var schemeTag = new KeyValuePair<string, object?>("scheme", Scheme.Name);
+            PostQuantumJwtBearerDiagnostics.AuthFailure.Add(1,
+                schemeTag,
+                new KeyValuePair<string, object?>("reason", ex.GetType().Name));
+            PostQuantumJwtBearerDiagnostics.AuthLatency.Record(
+                stopwatch.Elapsed.TotalMilliseconds,
+                schemeTag,
+                new KeyValuePair<string, object?>("result", "failure"));
+            activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, ex.Message);
+            activity?.SetTag("result", "failure");
+            activity?.SetTag("failure.reason", ex.GetType().Name);
+
             Logger.ValidationFailed(ex);
 
             var failed = new PostQuantumJwtBearerAuthenticationFailedContext(
@@ -155,6 +178,19 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
         }
         catch (Exception ex)
         {
+            stopwatch.Stop();
+            var schemeTag = new KeyValuePair<string, object?>("scheme", Scheme.Name);
+            PostQuantumJwtBearerDiagnostics.AuthFailure.Add(1,
+                schemeTag,
+                new KeyValuePair<string, object?>("reason", ex.GetType().Name));
+            PostQuantumJwtBearerDiagnostics.AuthLatency.Record(
+                stopwatch.Elapsed.TotalMilliseconds,
+                schemeTag,
+                new KeyValuePair<string, object?>("result", "failure"));
+            activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, ex.Message);
+            activity?.SetTag("result", "failure");
+            activity?.SetTag("failure.reason", ex.GetType().Name);
+
             Logger.ValidationFailed(ex);
 
             var failed = new PostQuantumJwtBearerAuthenticationFailedContext(
@@ -163,6 +199,16 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
 
             return failed.Result ?? AuthenticateResult.Fail(ex);
         }
+
+        stopwatch.Stop();
+        var schemeTagSuccess = new KeyValuePair<string, object?>("scheme", Scheme.Name);
+        PostQuantumJwtBearerDiagnostics.AuthSuccess.Add(1, schemeTagSuccess);
+        PostQuantumJwtBearerDiagnostics.AuthLatency.Record(
+            stopwatch.Elapsed.TotalMilliseconds,
+            schemeTagSuccess,
+            new KeyValuePair<string, object?>("result", "success"));
+        activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Ok);
+        activity?.SetTag("result", "success");
 
         var ticket = new AuthenticationTicket(validated.Principal, Scheme.Name);
         return AuthenticateResult.Success(ticket);
@@ -181,7 +227,7 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
             return;
         }
 
-        var realm = EscapeForQuotedString(Options.Realm ?? Scheme.Name);
+        var realm = HeaderEncoding.EscapeForQuotedString(Options.Realm ?? Scheme.Name);
 
         var authResult = await Context.AuthenticateAsync(Scheme.Name).ConfigureAwait(false);
         var hasAuthenticationError = authResult?.Failure != null;
@@ -192,32 +238,6 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
 
         Response.Headers.WWWAuthenticate = header;
         Response.StatusCode = StatusCodes.Status401Unauthorized;
-    }
-
-    // RFC 7235 §2.2: realm is a quoted-string; the only characters that must be
-    // escaped inside it are \ and ". Anything else passes through verbatim. We
-    // do NOT strip control characters here — operators who put control bytes
-    // in a realm value have bigger problems than header formatting — but we
-    // do guarantee the header parses.
-    private static string EscapeForQuotedString(string value)
-    {
-        if (!value.AsSpan().ContainsAny('\\', '"'))
-        {
-            return value;
-        }
-
-        var sb = new System.Text.StringBuilder(value.Length + 4);
-        foreach (var ch in value)
-        {
-            if (ch is '\\' or '"')
-            {
-                sb.Append('\\');
-            }
-
-            sb.Append(ch);
-        }
-
-        return sb.ToString();
     }
 
     private static void AppendClaim(ClaimsIdentity identity, string name, JsonElement element)

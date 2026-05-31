@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>PostQuantum.AspNetCore.Benchmarks</RootNamespace>
+    <AssemblyName>PostQuantum.AspNetCore.Benchmarks</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <!-- Benchmark methods conventionally use Method_Scenario names; the
+         GlobalSetup/Cleanup pattern means CA1001 isn't load-bearing here. -->
+    <NoWarn>$(NoWarn);CA1014;CA1062;CA1707;CA1001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/PostQuantum.AspNetCore/PostQuantum.AspNetCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+  </ItemGroup>
+
+</Project>

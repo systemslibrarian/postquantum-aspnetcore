@@ -10,7 +10,7 @@
     <!-- Test project: CA1707 is silenced because xunit tests idiomatically
          use Method_Scenario_Expected naming, and the docs / CLS rules don't
          apply to a non-shipping test assembly. -->
-    <NoWarn>$(NoWarn);CA1014;CA1707;CS1591</NoWarn>
+    <NoWarn>$(NoWarn);CA1014;CA1707;CS1591;IDE1006</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

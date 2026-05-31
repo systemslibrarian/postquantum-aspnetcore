@@ -97,12 +97,23 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
 
         if (_cache.TryGetValue(keyId, out var cached))
         {
+            PostQuantumJwtBearerDiagnostics.KeyRingResolve.Add(1,
+                new KeyValuePair<string, object?>("result", "hit"));
             return cached;
         }
 
         // Unknown kid → give the directory one chance to refresh.
         await RefreshAsync(force: true, cancellationToken).ConfigureAwait(false);
-        return _cache.TryGetValue(keyId, out var resolved) ? resolved : null;
+        if (_cache.TryGetValue(keyId, out var resolved))
+        {
+            PostQuantumJwtBearerDiagnostics.KeyRingResolve.Add(1,
+                new KeyValuePair<string, object?>("result", "refresh-hit"));
+            return resolved;
+        }
+
+        PostQuantumJwtBearerDiagnostics.KeyRingResolve.Add(1,
+            new KeyValuePair<string, object?>("result", "refresh-miss"));
+        return null;
     }
 
     /// <summary>
@@ -125,6 +136,7 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
         }
 
         await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var fetchStopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var nowInsideLock = _timeProvider.GetUtcNow();
@@ -186,6 +198,10 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
 
             _cache = newCache;
             _lastFetched = _timeProvider.GetUtcNow();
+            fetchStopwatch.Stop();
+            PostQuantumJwtBearerDiagnostics.KeyRingFetchLatency.Record(
+                fetchStopwatch.Elapsed.TotalMilliseconds,
+                new KeyValuePair<string, object?>("result", "success"));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -198,6 +214,10 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
             // as TaskCanceledException with no caller cancellation) are logged
             // and swallowed — Resolve() will return null for an unknown kid,
             // which surfaces upstream as a fail-closed signature-resolver miss.
+            fetchStopwatch.Stop();
+            PostQuantumJwtBearerDiagnostics.KeyRingFetchLatency.Record(
+                fetchStopwatch.Elapsed.TotalMilliseconds,
+                new KeyValuePair<string, object?>("result", "failure"));
             _logger?.KeyRingFetchFailed(ex, _endpoint);
         }
         finally

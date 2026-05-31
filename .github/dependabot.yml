@@ -1,0 +1,43 @@
+# Dependabot automates dependency updates for nuget package references
+# and GitHub Actions used in workflows. PRs land on Mondays — bundle the
+# review with start-of-week triage. Crypto-sensitive dependencies bump
+# more often than weekly anyway via the security-advisories path, which
+# Dependabot also covers automatically.
+version: 2
+
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    groups:
+      # Treat ASP.NET Core framework references as one bundle — they
+      # move together by .NET release cadence anyway.
+      aspnetcore:
+        patterns:
+          - "Microsoft.AspNetCore.*"
+          - "Microsoft.Extensions.*"
+      test-tooling:
+        patterns:
+          - "xunit*"
+          - "Microsoft.NET.Test.*"
+          - "coverlet.*"
+          - "FsCheck*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"

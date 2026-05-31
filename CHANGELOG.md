@@ -10,6 +10,108 @@ versions.
 
 _No changes yet._
 
+## [0.5.0-preview.1] — 2026-05-31
+
+A **production-depth** release. v0.4 finished the surface; v0.5 deepens
+it: fuzz testing caught two real fail-open bugs, the handler now defends
+in depth against any exception out of `Validate()`, and the library
+emits proper metrics + tracing for production observability. AOT
+publishing is verified end-to-end via a smoke-test project enforced in
+CI. Differentiation messaging is sharpened across README, csproj, and
+CLAUDE so it's unmissable that this is the ASP.NET Core integration
+layer, not a cryptography library.
+
+### Fixed (correctness)
+
+- **Handler now catches the broader `PqJwtException` family** instead
+  of only `PqJwtValidationException`. The engine can throw `PqJwtException`
+  (parent class) for configuration mismatches like "encrypted token,
+  no decryption key configured" — those used to escape the handler and
+  surface as 500s, leaking server state. Found by the new
+  `FuzzTests.RandomBytesAsTokens_…` test.
+- **Defense-in-depth: handler now catches any non-fatal exception out
+  of `Validator.Validate()`.** Engine leaks (e.g. `FormatException`
+  from bad Base64 inside a token segment, `CryptographicException`
+  from a malformed key blob) used to produce 500s. They are now
+  treated as fail-closed 401s. `OutOfMemoryException` and
+  `StackOverflowException` are explicitly NOT caught — they're
+  environmental and should crash the host so an operator notices.
+
+### Added
+
+- **`System.Diagnostics.Metrics` instrumentation.** New static type
+  `PostQuantumJwtBearerDiagnostics` exposes the
+  `"PostQuantum.AspNetCore"` `Meter` and `ActivitySource`. The handler
+  emits `postquantum.jwt.auth.success` (counter, tagged with `scheme`),
+  `postquantum.jwt.auth.failure` (counter, tagged with `scheme` +
+  `reason`), and `postquantum.jwt.auth.latency` (histogram). The HTTP
+  key ring emits `postquantum.jwt.keyring.resolve` (counter, tagged
+  with `result`) and `postquantum.jwt.keyring.fetch.latency`
+  (histogram). Subscribe via OpenTelemetry / Prometheus exporters /
+  Application Insights — the instrumentation name + version is
+  versioned and documented.
+- **`ActivitySource` distributed-tracing instrumentation.** The handler
+  emits a `PostQuantumJwtBearer.Validate` span around every token
+  validation, tagged with `scheme`, `result`, and (on failure) the
+  exception type. Span status is set to OK / Error appropriately.
+- **`tests/PostQuantum.AspNetCore.AotSmokeTest`.** A minimal consuming
+  app that exercises every public API entry point and is published
+  with `PublishAot=true` in CI. `TreatWarningsAsErrors=true` means an
+  AOT-unsafe regression in the library fails the build. The
+  `aot-publish` CI job runs on Ubuntu (where clang is available);
+  Windows local runs work too with Visual Studio Build Tools
+  installed.
+- **`benchmarks/PostQuantum.AspNetCore.Benchmarks`.** BenchmarkDotNet
+  project for `PqJwtValidator.Validate` throughput + allocations and
+  `HttpPostQuantumJwtKeyRing.Resolve` hot-path lookup. Results land in
+  `docs/PERFORMANCE.md`.
+- **Property-flavoured fuzz on the header helpers** (`HeaderEncodingProperties`,
+  1000 deterministic-seeded iterations per case): realm escaping
+  round-trip parseability against `AuthenticationHeaderValue.TryParse`,
+  no-op preservation on safe inputs, count-balance invariant on
+  escaped output, case-insensitive bearer-prefix acceptance,
+  non-bearer rejection.
+- **In-process structured fuzz** (`FuzzTests`, 2000 iterations per
+  case) for the full pipeline. Caught the two fail-open bugs above
+  and locks them with regression tests.
+- **`HeaderEncoding` internal helper class** extracted from the
+  handler with `InternalsVisibleTo("PostQuantum.AspNetCore.Tests")`,
+  so the helpers are unit-testable without spinning a full request
+  pipeline.
+- **`.github/dependabot.yml`** for weekly NuGet + GitHub Actions
+  dependency updates, grouped sensibly (AspNetCore family, test
+  tooling) so PRs don't fragment.
+- **`docs/API-STABILITY.md`** documenting the public-surface stability
+  promise during the `0.x` preview series and what blocks `1.0`.
+- **`docs/PERFORMANCE.md`** with the benchmark-running instructions,
+  what's measured, and what to expect (ML-DSA-65 verify is in
+  milliseconds, not microseconds — plan for it).
+- **`stryker-config.json`** for mutation testing. The initial run
+  couldn't produce a useful score (coverage capture failed on this
+  project); configuration is preserved so a future run on a stable
+  Stryker release should land a baseline. Tracked in
+  `KNOWN-GAPS.md`.
+- **9 new tests**: 5 diagnostic-contract tests (per-scheme isolation
+  via process-global signal filtering), 3 fuzz tests, plus a property
+  block for `HeaderEncoding`. **54 tests total, zero skips on
+  PQ-capable hosts.**
+
+### Changed
+
+- **Messaging across README, csproj `<Description>`, NuGet release
+  notes, and CLAUDE.md** sharpened to be unmissable: this is the
+  **high-level ASP.NET Core integration**, not a cryptography
+  library. New "Where does this fit in the stack?" diagram and a
+  "Not to be confused with…" comparison table covering
+  BouncyCastle, liboqs, `System.Security.Cryptography`,
+  `PostQuantum.Jwt`, and `Microsoft.AspNetCore.Authentication.JwtBearer`.
+- **`TestServerFactory` now accepts a constructor scheme-name
+  parameter** so diagnostic tests can isolate process-global
+  `Meter` and `ActivitySource` signals from concurrent test runs.
+  Object-initializer-based usage was dropped because init-only
+  properties evaluate after the constructor — a subtle but real
+  bug surfaced during T1.
+
 ## [0.4.0-preview.1] — 2026-05-31
 
 A **surface-completion** release. v0.3 fixed correctness; v0.4 fills in
@@ -267,7 +369,8 @@ release cadence.
 
 ---
 
-[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.4.0-preview.1...HEAD
+[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.5.0-preview.1...HEAD
+[0.5.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.4.0-preview.1...v0.5.0-preview.1
 [0.4.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.3.0-preview.1...v0.4.0-preview.1
 [0.3.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.2.0-preview.1...v0.3.0-preview.1
 [0.2.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.1.0-preview.1...v0.2.0-preview.1

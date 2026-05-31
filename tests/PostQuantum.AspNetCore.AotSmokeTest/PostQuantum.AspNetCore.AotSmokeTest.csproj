@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>PostQuantum.AspNetCore.AotSmokeTest</RootNamespace>
+    <AssemblyName>PostQuantum.AspNetCore.AotSmokeTest</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- The whole point of this project: prove the library can be
+         consumed in an AOT-published app without warnings.
+         PublishAot is set explicitly so `dotnet publish` exercises the
+         AOT path. Linker warnings are escalated to errors so an
+         AOT-unsafe regression in the library fails CI. -->
+    <PublishAot>true</PublishAot>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CA1014</NoWarn>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/PostQuantum.AspNetCore/PostQuantum.AspNetCore.csproj" />
+  </ItemGroup>
+
+</Project>

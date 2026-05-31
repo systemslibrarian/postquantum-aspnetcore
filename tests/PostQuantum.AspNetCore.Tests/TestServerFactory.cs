@@ -33,8 +33,21 @@ internal sealed class TestServerFactory : IDisposable
     public Action<PostQuantumJwtBearerOptions> ConfigureOptions { get; set; }
         = static _ => { };
 
-    public TestServerFactory()
+    /// <summary>
+    /// Per-instance scheme name. Defaults to the package default; tests
+    /// that need to observe process-global signals (Meter/ActivitySource)
+    /// without racing other parallel tests can supply a unique name and
+    /// filter listener callbacks by the <c>scheme</c> tag.
+    /// </summary>
+    public string SchemeName { get; }
+
+    public TestServerFactory() : this(PostQuantumJwtBearerDefaults.AuthenticationScheme)
     {
+    }
+
+    public TestServerFactory(string schemeName)
+    {
+        SchemeName = schemeName;
         Signer = MLDsa.GenerateKey(MLDsaAlgorithm.MLDsa65);
         Verifier = MLDsa.ImportMLDsaPublicKey(
             MLDsaAlgorithm.MLDsa65, Signer.ExportMLDsaPublicKey());
@@ -47,8 +60,8 @@ internal sealed class TestServerFactory : IDisposable
                 {
                     services.AddRouting();
                     services
-                        .AddAuthentication(PostQuantumJwtBearerDefaults.AuthenticationScheme)
-                        .AddPostQuantumJwtBearer(options =>
+                        .AddAuthentication(SchemeName)
+                        .AddPostQuantumJwtBearer(SchemeName, options =>
                         {
                             options.ValidationParameters = new PqJwtValidationParameters
                             {

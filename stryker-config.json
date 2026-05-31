@@ -1,0 +1,27 @@
+{
+  "stryker-config": {
+    "project": "src/PostQuantum.AspNetCore/PostQuantum.AspNetCore.csproj",
+    "test-projects": [
+      "tests/PostQuantum.AspNetCore.Tests/PostQuantum.AspNetCore.Tests.csproj"
+    ],
+    "reporters": ["progress", "html", "cleartext"],
+    "thresholds": {
+      "high": 80,
+      "low": 70,
+      "break": 60
+    },
+    "mutate": [
+      "src/PostQuantum.AspNetCore/**/*.cs",
+      "!src/PostQuantum.AspNetCore/AssemblyInfo.cs"
+    ],
+    "ignore-mutations": [
+      "string"
+    ],
+    "ignore-methods": [
+      "*Logging*",
+      "ArgumentNullException.ThrowIfNull",
+      "ArgumentException.ThrowIfNullOrEmpty"
+    ],
+    "language-version": "latest"
+  }
+}

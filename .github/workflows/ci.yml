@@ -158,6 +158,28 @@ jobs:
           fi
           echo "PQ-required check passed on Linux: 0 skipped tests."
 
+  aot-publish:
+    # Proves the library compiles AOT-clean end-to-end. The tiny
+    # tests/PostQuantum.AspNetCore.AotSmokeTest project exercises the public
+    # surface; running `dotnet publish -p:PublishAot=true` against it would
+    # surface any unannotated reflection in the library as an IL trim error
+    # (TreatWarningsAsErrors=true escalates them). Ubuntu has clang installed
+    # for the native-link step.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: AOT publish smoke test
+        run: |
+          set -euo pipefail
+          dotnet publish tests/PostQuantum.AspNetCore.AotSmokeTest/PostQuantum.AspNetCore.AotSmokeTest.csproj \
+            -c Release \
+            --runtime linux-x64 \
+            -p:PublishAot=true
+
   pack-verify:
     # Make sure the package itself builds cleanly on every PR — catches
     # metadata regressions long before a release tag is pushed.

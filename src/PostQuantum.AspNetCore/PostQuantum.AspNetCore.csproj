@@ -17,17 +17,17 @@
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <PackageId>PostQuantum.AspNetCore</PackageId>
-    <Version>0.4.0-preview.1</Version>
+    <Version>0.5.0-preview.1</Version>
     <Title>PostQuantum.AspNetCore — quantum-resistant JWT bearer auth for ASP.NET Core</Title>
     <Authors>Paul Clark</Authors>
-    <Description>The definitive ASP.NET Core integration for post-quantum JWT authentication. Adds AddPostQuantumJwtBearer() so hybrid ML-DSA-65 + X-Wing (X25519 / ML-KEM-768) tokens slot into the standard authentication pipeline. Built on the native .NET 10 BCL post-quantum primitives via PostQuantum.Jwt. Fail-closed by construction, small surface, honest about its limits. Includes an event-hook surface (OnTokenValidated / OnAuthenticationFailed / OnChallenge), an HTTP-fetched key ring with async resolution, end-to-end integration tests, and a CycloneDX SBOM packed inside the .nupkg. Preview release — not for production use.</Description>
+    <Description>High-level ASP.NET Core integration for post-quantum JWT authentication. This is the application-layer wiring — extension methods, an AuthenticationHandler, event hooks, a JWKS-equivalent key ring, hosted-service warmup, metrics, and tracing — NOT a cryptography library. The actual ML-DSA-65 / X-Wing / AES-GCM work happens in PostQuantum.Jwt and the .NET 10 BCL primitives. We don't compete with BouncyCastle or liboqs; we sit on top of them. Adds AddPostQuantumJwtBearer() so hybrid ML-DSA-65 + X-Wing tokens slot into the standard ASP.NET Core authentication pipeline exactly the way AddJwtBearer always has. Fail-closed by construction, AOT-compatible, with metrics and tracing emitted via System.Diagnostics. Preview release — not for production use.</Description>
     <PackageProjectUrl>https://github.com/systemslibrarian/postquantum-aspnetcore</PackageProjectUrl>
     <RepositoryUrl>https://github.com/systemslibrarian/postquantum-aspnetcore</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>jwt;jose;jwe;post-quantum;pqc;ml-dsa;ml-kem;x-wing;hybrid;aspnetcore;authentication;jwtbearer;net10</PackageTags>
-    <PackageReleaseNotes>0.4.0-preview.1: Surface-completion release. New AddPostQuantumJwtKeyRingWarmup() hosted-service helper closes the cold-start gap (warms IPostQuantumJwtKeyRing at host startup, with optional periodic refresh; fail-fast or best-effort modes). PreloadAsync lifted onto IPostQuantumJwtKeyRing with a no-op default so non-HTTP rings can opt in. New samples/PostQuantum.AspNetCore.SignalR.Demo proves OnMessageReceived end-to-end via SignalR's ?access_token= pattern with an in-page browser client. Sibling PostQuantum.Jwt.AspNetCore is now formally marked superseded in the engine repo. Tests: 40 (was 35), zero skips. Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.5.0-preview.1: Production-depth release. Two real fail-open bugs found by new fuzz tests and fixed (handler now catches the broader PqJwtException family AND any non-fatal exception from Validate, so engine leaks like FormatException no longer escape as 500s). New: System.Diagnostics.Metrics + ActivitySource instrumentation (Meter "PostQuantum.AspNetCore" with auth success/failure counters, latency histograms, key-ring lookup tags; ActivitySource for distributed tracing). AOT publishing verified end-to-end via tests/PostQuantum.AspNetCore.AotSmokeTest and locked by a new aot-publish CI job. BenchmarkDotNet project at benchmarks/. Seeded property-flavoured fuzz on the header helpers (1000 iterations each). Repo hygiene: Dependabot config, docs/API-STABILITY.md, docs/PERFORMANCE.md, docs/audits/. Crystal-clear messaging that this is the high-level ASP.NET Core integration, NOT a low-level crypto library. Tests: 54 (was 40), zero skips. Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md.</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Copyright>Copyright © Paul Clark</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
@@ -50,6 +50,7 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <InternalsVisibleTo Include="PostQuantum.AspNetCore.Tests" />
   </ItemGroup>
 
   <ItemGroup>

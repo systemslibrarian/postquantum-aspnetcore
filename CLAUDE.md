@@ -5,15 +5,27 @@ changes.
 
 ## What this is
 
-The ASP.NET Core authentication adapter for
+The **high-level ASP.NET Core integration** for
 [`PostQuantum.Jwt`](https://github.com/systemslibrarian/postquantum-jwt) —
 `AddPostQuantumJwtBearer(…)` plus a small set of supporting types so hybrid
 post-quantum JWTs slot into the standard ASP.NET Core auth pipeline.
 
-This package adds **no new cryptography**. Every cryptographic operation goes
-through the engine library. If a change here looks like it's reaching for
-key material, signatures, or KEM operations, that's a sign the work belongs
-in `PostQuantum.Jwt`, not here.
+**What this package is NOT.** It is not a cryptography library. It is not
+a competitor to BouncyCastle, liboqs, or `System.Security.Cryptography`.
+No implementation of ML-DSA, ML-KEM, X25519, AES-GCM, or SHA-3 lives in
+this repo. Every cryptographic operation goes through the engine library
+(`PostQuantum.Jwt`), which in turn uses the FIPS-validated .NET 10 BCL
+post-quantum primitives plus BouncyCastle (for the X25519 piece the BCL
+doesn't ship). If a change here looks like it's reaching for key
+material, signatures, KEM operations, or block-cipher modes, that's a
+sign the work belongs in `PostQuantum.Jwt`, not here.
+
+**What this package IS.** The application-layer wiring: extension
+methods, an `AuthenticationHandler`, options + four event hooks
+(`OnMessageReceived` / `OnTokenValidated` / `OnAuthenticationFailed` /
+`OnChallenge`), a JWKS-equivalent key ring, a hosted-service warmup,
+metrics + tracing via `System.Diagnostics`. Everything you'd otherwise
+hand-write between your ASP.NET Core app and the engine library.
 
 ## Engineering discipline
 

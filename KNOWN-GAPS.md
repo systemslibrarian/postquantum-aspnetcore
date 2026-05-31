@@ -5,7 +5,7 @@ do, what is unverified, and where the sharp edges are. Honesty over polish:
 if something is incomplete, it is listed here rather than glossed over. This
 file is part of the contract with anyone evaluating the package.
 
-Last reviewed for: `0.4.0-preview.1`.
+Last reviewed for: `0.5.0-preview.1`.
 
 ## Inherited from `PostQuantum.Jwt`
 
@@ -74,6 +74,22 @@ for the full list.
   remaining `JwtBearerEvents`-style hooks are not implemented because no
   consumer has asked yet; if you need one, please open an issue with the
   scenario.
+
+### Testing depth
+
+- **Mutation testing baseline is incomplete.** `stryker-config.json`
+  is checked in and `dotnet stryker` runs, but the initial run could
+  not produce a useful mutation score: Stryker's coverage-capture
+  step failed on this project and most mutants ended up filtered or
+  flagged as compile errors. Tracked for a v0.6 follow-up; the
+  configuration is preserved so a future run on a stable Stryker
+  release should "just work."
+- **No coverage-guided fuzzing (libFuzzer / SharpFuzz) yet.** The
+  in-process structured fuzz in `FuzzTests.cs` runs 2000 adversarial
+  inputs per case per CI run and *did* catch two real fail-open bugs
+  in v0.5 (`PqJwtException` leak, `FormatException` leak), but it's
+  strictly weaker than coverage-guided fuzzing. A SharpFuzz harness
+  would explore deeper.
 
 ### Packaging / CI
 

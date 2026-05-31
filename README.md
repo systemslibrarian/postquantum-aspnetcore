@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 
-**The definitive ASP.NET Core integration for post-quantum JWT authentication.**
+**The high-level ASP.NET Core integration for post-quantum JWT authentication.**
 One line of configuration — `AddPostQuantumJwtBearer(…)` — and hybrid
 ML-DSA-65 + X-Wing tokens slot into the standard authentication pipeline
 exactly the way `AddJwtBearer` always has. Built on
@@ -13,15 +13,62 @@ exactly the way `AddJwtBearer` always has. Built on
 the native .NET 10 BCL post-quantum primitives. Fail-closed by construction,
 small surface, honest about its limits.
 
-> **Status — `0.4.0-preview.1`.** Preview software. Not for production use.
+> **What this package *is*: a thin, opinionated **application layer** for
+> ASP.NET Core authentication.** Extension methods, an
+> `AuthenticationHandler`, event hooks, a JWKS-equivalent key ring, a
+> hosted-service warmup, and metrics + tracing — all the wiring you'd
+> otherwise write yourself to make post-quantum JWTs feel native to
+> `AddAuthentication`.
+>
+> **What this package is *not*: a cryptography library.** No
+> implementation of ML-DSA, ML-KEM, X25519, AES-GCM, or SHA-3 lives in
+> here. We don't compete with [BouncyCastle](https://www.bouncycastle.org/csharp/),
+> liboqs, or `System.Security.Cryptography`. The actual signing,
+> verification, key encapsulation, and content encryption all happen
+> inside [`PostQuantum.Jwt`](https://github.com/systemslibrarian/postquantum-jwt),
+> which in turn uses the FIPS-validated .NET 10 BCL post-quantum
+> primitives (with BouncyCastle for the one piece the BCL doesn't ship:
+> X25519). Think of `PostQuantum.AspNetCore` as **the** `AddJwtBearer`
+> **equivalent** that knows the right things about ML-DSA-65 — not a
+> reinvention of the crypto stack underneath.
+
+> **Status — `0.5.0-preview.1`.** Preview software. Not for production use.
 > The API may change before 1.0, and the underlying cryptographic construction
 > has not been independently audited. Read [`KNOWN-GAPS.md`](KNOWN-GAPS.md)
 > before depending on this for anything that matters.
 
 ---
 
+## Where does this fit in the stack?
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Your ASP.NET Core app                                               │
+│  builder.Services.AddAuthentication().AddPostQuantumJwtBearer(...)   │
+├──────────────────────────────────────────────────────────────────────┤
+│  PostQuantum.AspNetCore                                  (this lib)  │
+│  · AuthenticationHandler + options + 4 event hooks                   │
+│  · IPostQuantumJwtKeyRing (JWKS-equivalent)                          │
+│  · Hosted-service warmup, metrics, tracing                           │
+├──────────────────────────────────────────────────────────────────────┤
+│  PostQuantum.Jwt                          (the engine, separate pkg) │
+│  · PqJwtBuilder / PqJwtValidator                                     │
+│  · X-Wing combiner, JWE wire format, replay cache                    │
+├──────────────────────────────────────────────────────────────────────┤
+│  Crypto primitives                                  (not this lib)   │
+│  · System.Security.Cryptography.MLDsa / MLKem  (.NET 10 BCL)         │
+│  · BouncyCastle.Cryptography                   (X25519 only)         │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+This library sits at the **top** of that stack — the application
+integration layer. It does **no cryptography of its own**. If you're
+looking for raw ML-DSA, ML-KEM, X25519, or AES-GCM, those live in the
+.NET BCL and BouncyCastle and we are happy customers, not competitors.
+
 ## Table of contents
 
+- [Where does this fit in the stack?](#where-does-this-fit-in-the-stack)
 - [Why](#why)
 - [Install](#install)
 - [60-second tour](#60-second-tour)
@@ -44,6 +91,18 @@ small surface, honest about its limits.
 
 ## Why
 
+**Why a separate package, when you could just call `PostQuantum.Jwt`
+yourself from your ASP.NET Core app?** Because authentication wiring is
+where the bugs live. Token retrieval from `Authorization` (or `?access_token=`
+for SignalR), case-insensitive `Bearer` prefix matching, the
+`WWW-Authenticate` challenge response with RFC-compliant realm escaping,
+event hooks for principal enrichment, key-ring rotation, hosted-service
+cache warmup, fail-closed handling of every exception path, metrics for
+ops dashboards, distributed-tracing spans — `Microsoft.AspNetCore.Authentication.JwtBearer`
+does all of that for the *classical* algorithms. This library does it
+for `ML-DSA-65`. **You shouldn't have to write the wiring yourself.**
+
+**Why post-quantum at all?**
 A cryptographically relevant quantum computer would break the elliptic-curve
 math behind every JWT signature in production today (EdDSA, ECDSA, RSA). Pure
 post-quantum schemes are new and comparatively under-attacked. **Hybrid** hedges
@@ -70,13 +129,13 @@ nothing else.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.AspNetCore --version 0.4.0-preview.1
+dotnet add package PostQuantum.AspNetCore --version 0.5.0-preview.1
 ```
 
 Or in a `.csproj`:
 
 ```xml
-<PackageReference Include="PostQuantum.AspNetCore" Version="0.4.0-preview.1" />
+<PackageReference Include="PostQuantum.AspNetCore" Version="0.5.0-preview.1" />
 ```
 
 **Runtime requirement:** the native ML-KEM / ML-DSA primitives need an
@@ -389,6 +448,16 @@ interop, JWKS, multi-algorithm agility, or any standards-conformant JWT.
 tokens *now*, you control both the issuer and the verifier, and you accept
 that your tokens won't validate in any other ecosystem until IANA registers
 these identifiers and standard libraries catch up.
+
+### Not to be confused with…
+
+| Package                                      | What it is                                                                 | Why it isn't this  |
+|----------------------------------------------|----------------------------------------------------------------------------|--------------------|
+| **`BouncyCastle.Cryptography`**              | A full-stack C# cryptography toolkit — block ciphers, public-key crypto, X.509, TLS, PKCS, OpenPGP, post-quantum primitives, and more. | A primitive library — no JWT support, no ASP.NET Core integration. `PostQuantum.Jwt` uses it for X25519 only; this package never touches it directly. |
+| **`liboqs` / `liboqs-dotnet`**               | Open-source post-quantum cryptography primitives (KEMs, signatures) maintained by the Open Quantum Safe project. | A primitive library. Different choice from the BCL's `MLDsa`/`MLKem`; the engine library has chosen the BCL path. |
+| **`System.Security.Cryptography`** (BCL)     | The .NET 10 base class library — including FIPS-validated `MLDsa`, `MLKem`, `AesGcm`, etc. | The actual implementation under everything else in the diagram above. `PostQuantum.AspNetCore` does not reimplement any BCL primitive. |
+| **`PostQuantum.Jwt`**                        | The engine: `PqJwtBuilder` to mint hybrid signed / signed-then-encrypted tokens; `PqJwtValidator` to verify them; the X-Wing combiner; the JWE wire format. | The library *under* `PostQuantum.AspNetCore`. If you're not using ASP.NET Core, use this directly. |
+| **`Microsoft.AspNetCore.Authentication.JwtBearer`** | Microsoft's standard JWT bearer handler. Supports every IANA JOSE algorithm. | The right choice for **every JWT scenario except post-quantum**. This package is the post-quantum sibling, not a replacement. |
 
 ---
 

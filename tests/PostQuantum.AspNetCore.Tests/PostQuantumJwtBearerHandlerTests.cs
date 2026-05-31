@@ -256,6 +256,43 @@ public sealed class PostQuantumJwtBearerHandlerTests
         Assert.Empty(resp.Headers.WwwAuthenticate);
     }
 
+    [PqcFact]
+    public async Task OnTokenValidated_ThrowingHandler_RoutesThroughOnAuthenticationFailed()
+    {
+        // ChatGPT review item 4: an exception in a user-supplied
+        // OnTokenValidated hook must not escape as a 500. The wrapper
+        // try/catch routes it through OnAuthenticationFailed and ends as
+        // a fail-closed 401.
+        var failedFired = false;
+        Exception? observed = null;
+        using var factory = new TestServerFactory
+        {
+            ConfigureOptions = options =>
+            {
+                options.Events.OnTokenValidated = _ =>
+                    throw new InvalidOperationException("simulated enrichment failure");
+
+                options.Events.OnAuthenticationFailed = ctx =>
+                {
+                    failedFired = true;
+                    observed = ctx.Exception;
+                    return Task.CompletedTask;
+                };
+            },
+        };
+        using var client = factory.CreateClient();
+        var token = factory.MintToken();
+
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/me");
+        req.Headers.Authorization = new("Bearer", token);
+        using var resp = await client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+        Assert.True(failedFired, "OnAuthenticationFailed should fire when OnTokenValidated throws.");
+        Assert.IsType<InvalidOperationException>(observed);
+        Assert.Contains("simulated enrichment failure", observed!.Message, StringComparison.Ordinal);
+    }
+
     private static string TamperMiddleSegment(string token)
     {
         // JWT segments are dot-separated base64url. Flip a byte in the

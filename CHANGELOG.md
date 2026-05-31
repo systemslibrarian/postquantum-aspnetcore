@@ -82,13 +82,21 @@ them are closed here; the auth contract is unchanged.
   agree on the version. Wired into CI on every push.
 - **`dotnet format --verify-no-changes` CI job** — formatting drift
   fails the build.
-- **8 new tests** (handler-level + integration): kid resolution via
+- **11 new tests** (handler-level + integration): kid resolution via
   the key ring (success and unknown-kid fail-closed), kid rotation
-  doesn't ObjectDisposedException, `Validate()` throws at startup with
+  doesn't `ObjectDisposedException`, `Validate()` throws at startup with
   no key source, `OnMessageReceived` substitutes a token from a query
-  string, realm with embedded `"`/`\` produces a parseable header, and
-  cancellation propagates through `ResolveAsync`. **31 tests total,
-  zero skips on PQ-capable hosts.**
+  string, realm with embedded `"`/`\` produces a parseable header,
+  cancellation propagates through `ResolveAsync`, kid removal eviction
+  (via both `PreloadAsync` and unknown-kid-driven refresh), repeated
+  unknown-kid throttling, and a throwing `OnTokenValidated` handler
+  routes through `OnAuthenticationFailed` (not as a 500). **35 tests
+  total, zero skips on PQ-capable hosts.**
+- **`docs/audits/`** — preserved trail of independent reviews against
+  `0.2.0-preview.1` from ChatGPT (found the five correctness issues
+  above plus three test gaps) and Gemini (applied five of the fixes
+  in parallel). Both reviews are referenced from the findings table in
+  `docs/audits/README.md`.
 
 ### Changed
 

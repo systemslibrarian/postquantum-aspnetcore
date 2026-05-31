@@ -10,6 +10,42 @@ versions.
 
 _No changes yet._
 
+## [0.9.1-preview.1] — 2026-05-31
+
+A **follow-up polish** release on the 0.9 trust-and-adoption pass.
+Audit found one stale claim in the README and two opportunities to
+surface critical security guidance earlier in the consumer's read.
+
+### Fixed
+
+- **README Security posture had a stale claim.** It said "the bearer
+  prefix is matched ordinally — no case-insensitive surprises," but
+  that was changed to case-insensitive matching (RFC 6750) all the way
+  back in `0.3.0-preview.1`. Corrected to reflect actual behaviour and
+  expanded to call out the new fail-closed exception catch + RFC 7235
+  realm escaping.
+
+### Changed
+
+- **`docs/SECURITY-MODEL.md` surfaced at the top of the README's
+  Security posture section** with an explicit "read that before
+  depending on this for anything that matters" callout. Previously it
+  was only reachable via the "in a hurry?" jump-table; now the section
+  itself opens with the link.
+- **Production-readiness pointer added right after the 60-second
+  tour.** A ⚠️ callout shows the one-line Redis replay-cache wireup
+  so consumers see the production path immediately after the
+  happy-path demo, not buried in a later section.
+- **Replay-defence bullet in Security posture sharpened** — explicit
+  "**without a configured `IPqJwtReplayCache`, captured tokens are
+  reusable until they expire**" warning, with a link to the headline
+  Redis section.
+
+### Tests
+
+- **66/66 tests pass on PQ-capable hosts.** Documentation-and-warning
+  improvements only — no code changes.
+
 ## [0.9.0-preview.1] — 2026-05-31
 
 A **trust-and-adoption polish** release. The library code is mature
@@ -561,7 +597,8 @@ release cadence.
 
 ---
 
-[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.9.0-preview.1...HEAD
+[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.9.1-preview.1...HEAD
+[0.9.1-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.9.0-preview.1...v0.9.1-preview.1
 [0.9.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.8.0-preview.1...v0.9.0-preview.1
 [0.8.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.7.0-preview.1...v0.8.0-preview.1
 [0.7.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.6.0-preview.1...v0.7.0-preview.1

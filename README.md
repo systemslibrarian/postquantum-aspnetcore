@@ -36,7 +36,7 @@ construction. Small surface. Honest about its limits.
 > **equivalent** that knows the right things about ML-DSA-65 — not a
 > reinvention of the crypto stack underneath.
 
-> **Status — `0.9.0-preview.1`.** Preview software. Not for production use.
+> **Status — `0.9.1-preview.1`.** Preview software. Not for production use.
 > The API may change before 1.0, and the underlying cryptographic construction
 > has not been independently audited. Read [`KNOWN-GAPS.md`](KNOWN-GAPS.md)
 > before depending on this for anything that matters.
@@ -171,13 +171,13 @@ nothing else.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.AspNetCore --version 0.9.0-preview.1
+dotnet add package PostQuantum.AspNetCore --version 0.9.1-preview.1
 ```
 
 Or in a `.csproj`:
 
 ```xml
-<PackageReference Include="PostQuantum.AspNetCore" Version="0.9.0-preview.1" />
+<PackageReference Include="PostQuantum.AspNetCore" Version="0.9.1-preview.1" />
 ```
 
 **Runtime requirement:** the native ML-KEM / ML-DSA primitives need an
@@ -231,6 +231,20 @@ That's the whole integration. The handler is fail-closed by construction
 (tampered, expired, or wrong-issuer tokens produce `AuthenticateResult.Fail`),
 `RequireAuthorization()` returns 401 to unauthenticated callers, and standard
 `[Authorize(Roles = "...")]` attributes work against the `"role"` claim.
+
+> **⚠️ Before you ship this to production**, add one more line for
+> distributed replay protection — without it, captured tokens are
+> reusable until they expire:
+>
+> ```csharp
+> // dotnet add package PostQuantum.AspNetCore.RedisReplayCache
+> builder.Services.AddPostQuantumJwtRedisReplayCache(
+>     builder.Configuration["Redis:ConnectionString"]!);
+> ```
+>
+> See the [headline section](#distributed-replay-protection-with-redis--recommended-for-production)
+> below and the full [Security model](docs/SECURITY-MODEL.md) for the
+> deployment-shape matrix.
 
 A runnable end-to-end version of this — issuer endpoint, protected endpoint,
 ephemeral key pair — lives in [`samples/PostQuantum.AspNetCore.Demo`](samples/PostQuantum.AspNetCore.Demo).
@@ -361,7 +375,7 @@ companion package ships a Redis implementation that's a one-line
 wireup:
 
 ```bash
-dotnet add package PostQuantum.AspNetCore.RedisReplayCache --version 0.9.0-preview.1
+dotnet add package PostQuantum.AspNetCore.RedisReplayCache --version 0.9.1-preview.1
 ```
 
 ```csharp
@@ -727,35 +741,48 @@ See [`docs/MIGRATION.md`](docs/MIGRATION.md) for the diff-style guide.
 
 ## Security posture
 
-The short version, honestly.
+The short version, honestly. **The full security contract — what the
+library protects, what it does NOT protect, the replay-protection
+deployment matrix, the key-rotation cadence, and the fail-closed
+contract enumerated as a logical conjunction — lives in
+[`docs/SECURITY-MODEL.md`](docs/SECURITY-MODEL.md). Read that before
+depending on this for anything that matters.**
 
 **What you get**
 
-- **Fail-closed validation.** Bad signature, tampered ciphertext, expired or
-  not-yet-valid token, wrong issuer/audience, missing `exp`, missing `alg`,
-  or an `alg` we don't expect — every one of those throws inside
-  `PqJwtValidator`, and the handler turns it into `AuthenticateResult.Fail`.
-  There is no `alg: none`, no unsigned path, and no silent downgrade.
+- **Fail-closed validation.** Bad signature, tampered ciphertext, expired
+  or not-yet-valid token, wrong issuer/audience, missing `exp`, missing
+  `alg`, or an `alg` we don't expect — every one of those throws inside
+  `PqJwtValidator`, and the handler turns it into
+  `AuthenticateResult.Fail`. There is no `alg: none`, no unsigned path,
+  no silent downgrade, and no exception class from `Validate()` escapes
+  as a `500`.
 - **Native post-quantum primitives.** ML-DSA-65 and ML-KEM-768 are the
   FIPS-validated .NET 10 BCL implementations, not a re-implementation.
 - **Hybrid by construction (for encrypted tokens).** Confidentiality stays
   secure unless *both* X25519 and ML-KEM-768 fall.
-- **Strict, small-surface defaults.** Expiration is required, clock skew is a
-  modest 60 seconds, only the exact post-quantum algorithms are accepted, and
-  the bearer prefix is matched ordinally — no case-insensitive surprises.
+- **Strict, small-surface defaults.** Expiration is required, clock skew
+  is a modest 60 seconds, only the exact post-quantum algorithms are
+  accepted, the bearer prefix is matched case-insensitively per RFC 6750,
+  and the `WWW-Authenticate` realm is RFC 7235 quoted-string escaped.
 
 **What you must know**
 
-- **Not audited.** No third party has reviewed the design or implementation.
-- **Non-standard identifiers.** `alg`/`enc` values (`ML-DSA-65`, `X-Wing`)
-  are not IANA-registered. Tokens are intentionally not interoperable with
-  generic JWT tooling.
+- **Not audited.** No third party has reviewed the design or
+  implementation.
+- **Non-standard identifiers.** `alg`/`enc` values (`ML-DSA-65`,
+  `X-Wing`) are not IANA-registered. Tokens are intentionally not
+  interoperable with generic JWT tooling.
 - **Preview.** Treat the API and wire format as unstable until 1.0.
-- **Replay defence is opt-in and only as strong as the cache you provide.**
-  `InMemoryReplayCache` is single-process; back the
-  `IPqJwtReplayCache` hook with a distributed store for clusters.
+- **⚠️ Replay defence is opt-in.** **Without a configured
+  `IPqJwtReplayCache`, captured tokens are reusable until they expire.**
+  For multi-instance production, use
+  [`PostQuantum.AspNetCore.RedisReplayCache`](src/PostQuantum.AspNetCore.RedisReplayCache)
+  — see the [headline section](#distributed-replay-protection-with-redis--recommended-for-production)
+  above.
 
-Full detail in [`SECURITY.md`](SECURITY.md) and [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
+Full detail in [`docs/SECURITY-MODEL.md`](docs/SECURITY-MODEL.md),
+[`SECURITY.md`](SECURITY.md), and [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
 
 ---
 

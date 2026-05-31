@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.Authentication;
 
 namespace PostQuantum.AspNetCore.Tests;
 
@@ -208,6 +209,30 @@ public sealed class PostQuantumJwtBearerHandlerTests
     }
 
     [PqcFact]
+    public async Task OnTokenValidated_ResultFail_ReplacesSuccessTicket()
+    {
+        using var factory = new TestServerFactory
+        {
+            ConfigureOptions = options =>
+            {
+                options.Events.OnTokenValidated = ctx =>
+                {
+                    ctx.Result = AuthenticateResult.Fail(new InvalidOperationException("rejected by event"));
+                    return Task.CompletedTask;
+                };
+            },
+        };
+        using var client = factory.CreateClient();
+        var token = factory.MintToken();
+
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/me");
+        req.Headers.Authorization = new("Bearer", token);
+        using var resp = await client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [PqcFact]
     public async Task OnAuthenticationFailed_RunsOnTamperedToken()
     {
         var fired = false;
@@ -254,6 +279,32 @@ public sealed class PostQuantumJwtBearerHandlerTests
 
         Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
         Assert.Empty(resp.Headers.WwwAuthenticate);
+    }
+
+    [PqcFact]
+    public async Task Challenge_PreservesExistingWwwAuthenticateHeaders()
+    {
+        using var factory = new TestServerFactory
+        {
+            ConfigureOptions = options =>
+            {
+                options.Events.OnChallenge = ctx =>
+                {
+                    ctx.HttpContext.Response.Headers.Append("WWW-Authenticate", "Basic realm=\"legacy\"");
+                    return Task.CompletedTask;
+                };
+            },
+        };
+        using var client = factory.CreateClient();
+
+        using var resp = await client.GetAsync("/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+        Assert.Contains(resp.Headers.WwwAuthenticate, h =>
+            string.Equals(h.Scheme, "Basic", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(h.Parameter, "realm=\"legacy\"", StringComparison.Ordinal));
+        Assert.Contains(resp.Headers.WwwAuthenticate, h =>
+            string.Equals(h.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase));
     }
 
     [PqcFact]

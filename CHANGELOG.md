@@ -10,6 +10,46 @@ versions.
 
 _No changes yet._
 
+## [1.0.0-preview.2] — 2026-05-31
+
+A **bug-fix preview** on the `1.0.0-preview.1` API surface. No behavior
+changes for consumers who don't touch the event hooks; the three fixes
+below close gaps a real integrator would hit the moment they tried to
+use `Events` the way the stock `AddJwtBearer` lets you.
+
+### Fixed
+
+- **`OnMessageReceived` could not short-circuit.** The standard
+  `Microsoft.AspNetCore.Authentication.JwtBearer.MessageReceivedContext`
+  exposes a settable `Result` so the event can return
+  `AuthenticateResult.NoResult()` or `AuthenticateResult.Fail(...)`
+  directly. Ours did not — once the event ran, the handler always
+  proceeded into the `Authorization` header lookup. Added the missing
+  `Result` property; the handler now honors it.
+- **`OnTokenValidated` could not reject a valid token.** Same pattern
+  on `PostQuantumJwtBearerTokenValidatedContext`. The use case is
+  custom authorization that runs after cryptographic validation
+  (e.g. "the signature is valid but this `sub` is on a deny list").
+  Without a settable `Result`, the only way to reject was to throw,
+  which routed through `OnAuthenticationFailed` and lost the
+  intended `Fail(reason)`. Now an event can write
+  `ctx.Result = AuthenticateResult.Fail(...)` and the handler
+  returns that result in place of the success ticket.
+- **Challenge was overwriting `WWW-Authenticate` instead of appending.**
+  The previous code assigned `Response.Headers.WWWAuthenticate = header`,
+  which clobbers any challenge other middleware (e.g. a different
+  authentication scheme) had already added. Switched to
+  `Response.Headers.Append(...)` so multiple challenges coexist —
+  matches the behavior of the stock `JwtBearerHandler`.
+
+### Tests
+
+- Added `OnMessageReceivedTests.ResultNoResult_ShortCircuitsAuthorizationHeader`.
+- Added `PostQuantumJwtBearerHandlerTests.OnTokenValidated_ResultFail_ReplacesSuccessTicket`.
+- Added `PostQuantumJwtBearerHandlerTests.Challenge_PreservesExistingWwwAuthenticateHeaders`.
+
+Suite total: **69 tests, 0 failures, 0 skips** on PQ-capable hosts.
+
 ## [1.0.0-preview.1] — 2026-05-31
 
 **First release-candidate-preview cut.** Same API surface as

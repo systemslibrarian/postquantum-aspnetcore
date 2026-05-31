@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.Authentication;
 
 namespace PostQuantum.AspNetCore.Tests;
 
@@ -56,5 +57,31 @@ public sealed class OnMessageReceivedTests
         using var resp = await client.SendAsync(req);
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+    }
+
+    [PqcFact]
+    public async Task ResultNoResult_ShortCircuitsAuthorizationHeader()
+    {
+        using var factory = new TestServerFactory
+        {
+            ConfigureOptions = options =>
+            {
+                options.Events.OnMessageReceived = ctx =>
+                {
+                    ctx.Result = AuthenticateResult.NoResult();
+                    return Task.CompletedTask;
+                };
+            },
+        };
+        using var client = factory.CreateClient();
+        var token = factory.MintToken();
+
+        // Even with a valid header, the event result must win and stop
+        // the handler from continuing into the standard bearer lookup.
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/me");
+        req.Headers.Authorization = new("Bearer", token);
+        using var resp = await client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 }

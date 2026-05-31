@@ -96,6 +96,11 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
             Context, Scheme, Options);
         await Options.Events.OnMessageReceived(messageReceived).ConfigureAwait(false);
 
+        if (messageReceived.Result is not null)
+        {
+            return messageReceived.Result;
+        }
+
         string token;
         if (!string.IsNullOrEmpty(messageReceived.Token))
         {
@@ -210,6 +215,11 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
         activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Ok);
         activity?.SetTag("result", "success");
 
+        if (validated.Result is not null)
+        {
+            return validated.Result;
+        }
+
         var ticket = new AuthenticationTicket(validated.Principal, Scheme.Name);
         return AuthenticateResult.Success(ticket);
     }
@@ -236,7 +246,7 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
             ? $"Bearer realm=\"{realm}\", error=\"invalid_token\""
             : $"Bearer realm=\"{realm}\"";
 
-        Response.Headers.WWWAuthenticate = header;
+        Response.Headers.Append(Microsoft.Net.Http.Headers.HeaderNames.WWWAuthenticate, header);
         Response.StatusCode = StatusCodes.Status401Unauthorized;
     }
 

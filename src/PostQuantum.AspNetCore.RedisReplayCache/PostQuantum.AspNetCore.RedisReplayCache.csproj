@@ -11,7 +11,7 @@
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <PackageId>PostQuantum.AspNetCore.RedisReplayCache</PackageId>
-    <Version>1.0.0-preview.1</Version>
+    <Version>1.0.0-preview.2</Version>
     <Title>PostQuantum.AspNetCore.RedisReplayCache — Redis-backed jti replay cache for PostQuantum.Jwt</Title>
     <Authors>Paul Clark</Authors>
     <Description>A Redis-backed implementation of PostQuantum.Jwt's IPqJwtReplayCache, intended for horizontally-scaled deployments of PostQuantum.AspNetCore. Uses StackExchange.Redis SET NX with TTL = remaining token lifetime, so single-use jti enforcement coordinates across all instances. Companion to PostQuantum.AspNetCore. Preview release — not for production use.</Description>

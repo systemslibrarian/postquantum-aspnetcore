@@ -64,6 +64,12 @@ public sealed class PostQuantumJwtBearerMessageReceivedContext : PostQuantumJwtB
     /// entirely.
     /// </summary>
     public string? Token { get; set; }
+    /// <summary>
+    /// If set, the handler short-circuits and returns this result immediately.
+    /// Use this to return <see cref="AuthenticateResult.Fail(Exception)"/> or
+    /// <see cref="AuthenticateResult.NoResult"/> directly.
+    /// </summary>
+    public AuthenticateResult? Result { get; set; }
 }
 
 /// <summary>
@@ -105,6 +111,12 @@ public sealed class PostQuantumJwtBearerTokenValidatedContext : PostQuantumJwtBe
 
     /// <summary>The raw token string (post-<c>Bearer </c> prefix).</summary>
     public string Token { get; }
+    /// <summary>
+    /// If set, the handler skips constructing a success ticket and returns this
+    /// result instead. Use this to reject a mathematically valid token based on
+    /// custom authorization rules by setting <see cref="AuthenticateResult.Fail(Exception)"/>.
+    /// </summary>
+    public AuthenticateResult? Result { get; set; }
 }
 
 /// <summary>

@@ -5,7 +5,7 @@ do, what is unverified, and where the sharp edges are. Honesty over polish:
 if something is incomplete, it is listed here rather than glossed over. This
 file is part of the contract with anyone evaluating the package.
 
-Last reviewed for: `0.8.0-preview.1`.
+Last reviewed for: `0.9.0-preview.1`.
 
 ## Inherited from `PostQuantum.Jwt`
 
@@ -26,12 +26,12 @@ for the full list.
 
 ### Target framework
 
-- **`net10.0` only.** Multi-targeting `net8.0;net9.0;net10.0` was scoped but
-  not shipped: the underlying `PostQuantum.Jwt` engine relies on the BCL
-  `MLDsa` / `MLKem` types introduced in .NET 10, so any older TFM would
-  require a separate crypto backend. Tracked for a future release once the
-  engine grows a polyfill path or `Microsoft.Cryptography.PostQuantum`
-  ships out-of-band on the older runtimes.
+- **`net10.0` only.** The underlying `PostQuantum.Jwt` engine relies on the
+  BCL `MLDsa` / `MLKem` types introduced in .NET 10, so any older TFM would
+  require a separate cryptographic backend. Tracked for a future release
+  once the engine grows a polyfill path or
+  `Microsoft.Cryptography.PostQuantum` ships out-of-band on the older
+  runtimes.
 
 ### Key ring
 
@@ -41,8 +41,8 @@ for the full list.
   synchronous delegate, so a cold cache miss inside an auth request
   blocks a thread via `.GetAwaiter().GetResult()`. Tracked upstream for a
   fully-async resolver hook; in the meantime, **warm the cache at
-  startup** with `PreloadAsync` (or via a hosted background service) to
-  keep the hot path off the blocking path.
+  startup** with `AddPostQuantumJwtKeyRingWarmup(...)` to keep the hot
+  path off the blocking bridge.
 - **No ETag / `Cache-Control` awareness.** The HTTP key ring re-fetches on
   a fixed `refreshInterval` (default 5 minutes) and on unknown-`kid` misses.
   It does not honour HTTP caching headers. For a slow-changing directory
@@ -53,9 +53,9 @@ for the full list.
 - **No key-rotation rollover window.** When a key is removed from the
   upstream directory, the local cache only drops it on the next successful
   full refresh; tokens signed with that key keep validating against the
-  cached entry until then. For most operational rotation schemes this is the
-  desired behaviour; if you need hard cutover, restart the host or clear the
-  cache explicitly.
+  cached entry until then. For most operational rotation schemes this is
+  the desired behaviour; if you need hard cutover, restart the host or
+  clear the cache explicitly.
 
 ### Handler
 
@@ -64,32 +64,24 @@ for the full list.
   deployment terminates TLS upstream and rewrites headers, ensure
   `Microsoft.AspNetCore.HttpOverrides` is configured before authentication
   in the pipeline.
-- **No bearer-token retrieval hook.** Token always comes from the
-  `Authorization` header with a literal `Bearer ` prefix. No support for
-  query-string or cookie-borne tokens — by design (cookies are a poor
-  carrier for ~4.5 KB post-quantum tokens), but worth knowing.
-- **No `OnMessageReceived` / `OnForbidden` events.** The current event
-  surface is the three hooks consumers actually reach for
-  (`OnTokenValidated`, `OnAuthenticationFailed`, `OnChallenge`). The
-  remaining `JwtBearerEvents`-style hooks are not implemented because no
-  consumer has asked yet; if you need one, please open an issue with the
-  scenario.
+- **No `OnForbidden` event.** The current event surface is the four
+  hooks consumers actually reach for (`OnMessageReceived`,
+  `OnTokenValidated`, `OnAuthenticationFailed`, `OnChallenge`). The
+  remaining `JwtBearerEvents`-style `OnForbidden` is not implemented
+  because no consumer has asked yet; if you need it, please open an
+  issue with the scenario.
 
 ### Testing depth
 
 - **Mutation testing baseline is incomplete.** `stryker-config.json`
-  is checked in and `dotnet stryker` runs, but the initial run could
-  not produce a useful mutation score: Stryker's coverage-capture
-  step failed on this project and most mutants ended up filtered or
-  flagged as compile errors. Tracked for a v0.6 follow-up; the
-  configuration is preserved so a future run on a stable Stryker
-  release should "just work."
-- **No coverage-guided fuzzing (libFuzzer / SharpFuzz) yet.** The
-  in-process structured fuzz in `FuzzTests.cs` runs 2000 adversarial
-  inputs per case per CI run and *did* catch two real fail-open bugs
-  in v0.5 (`PqJwtException` leak, `FormatException` leak), but it's
-  strictly weaker than coverage-guided fuzzing. A SharpFuzz harness
-  would explore deeper.
+  is checked in and `dotnet stryker` runs, but the run could not
+  produce a useful mutation score on this project shape (likely an
+  xunit-v3 + NSubstitute test-discovery limitation in Stryker.NET).
+  Configuration is preserved for a future Stryker release that handles
+  this shape; the in-process fuzz tests catch the equivalents *they* can
+  catch (and have — twice in v0.5). See
+  [`docs/MUTATION-TESTING.md`](docs/MUTATION-TESTING.md) for the full
+  record.
 
 ### Packaging / CI
 
@@ -98,14 +90,14 @@ for the full list.
   present on the `nuget-publish` GitHub Environment, packages are signed
   with `dotnet nuget sign` and a DigiCert timestamp before push. Until a
   certificate is procured and that secret is populated, packages rely on
-  nuget.org's repository signature alone. Every release also emits GitHub
-  build-provenance attestations for the `.nupkg` and the SBOM — verify
-  with `gh attestation verify <file> --repo systemslibrarian/postquantum-aspnetcore`.
+  nuget.org's repository signature alone. Every release also emits
+  GitHub build-provenance attestations for the `.nupkg` and the SBOM —
+  verify with
+  `gh attestation verify <file> --repo systemslibrarian/postquantum-aspnetcore`.
 - **API baseline is opt-in.** `EnablePackageValidation` is on; the
   baseline comparison against `0.1.0-preview.1` is gated behind
   `-p:EnableBaselineValidation=true` until that version lands on
   nuget.org and the baseline package is resolvable.
-<!-- version-sync script landed in 0.3 — runs on every CI push. -->
 
 ---
 

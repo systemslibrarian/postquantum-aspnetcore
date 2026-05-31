@@ -10,6 +10,67 @@ versions.
 
 _No changes yet._
 
+## [0.9.0-preview.1] — 2026-05-31
+
+A **trust-and-adoption polish** release. The library code is mature
+enough that the next biggest improvement is friction reduction at
+the consumer's first touch and clarity about the security contract.
+
+### Added
+
+- **`docs/SECURITY-MODEL.md`** — comprehensive doc explaining what
+  the library protects (token integrity / authenticity, issuer +
+  audience binding, lifetime, algorithm pinning, fail-closed
+  exception handling, bearer-prefix normalisation, RFC-compliant
+  challenge responses, opt-in replay protection), what it does NOT
+  protect (key management, transport, authorization policy, DoS,
+  token revocation beyond expiration, side-channel resistance),
+  the replay-protection deployment-shape matrix, the key-rotation
+  cadence, the full fail-closed contract enumerated, and a
+  comparison vs standard `JwtBearer`.
+- **"Migrating from `AddJwtBearer`" section in the README** — a
+  side-by-side diff showing exactly what changes at the call site
+  (most apps need only that one block; `[Authorize]`, policies,
+  claims, and middleware all work unchanged downstream). Includes
+  a "Run both during migration" pattern for gradual rollout.
+- **"Highlights" section in the README** — at-a-glance bullet list
+  of the seven things a consumer needs to know in 15 seconds:
+  one-line wireup, fail-closed, distributed replay, JWKS-equivalent
+  rotation, event hooks, observability, AOT, honest preview status.
+- **"About this library" section in the README** — human + AI
+  transparency statement crediting the collaboration model.
+
+### Changed
+
+- **Redis replay protection elevated to a headline capability.**
+  The README's `Distributed replay protection with Redis` section
+  is now marked `⭐ recommended for production`, with explicit
+  guidance that **without a configured replay cache, `jti` is
+  carried but never enforced — a captured token is reusable until
+  it expires**. The "in a hurry?" jump-table surfaces the security
+  model + Redis path at the top of the readme.
+- **README lede tightened** for adoption focus — opens with the
+  one-line wireup and the unchanged-downstream promise (`[Authorize]`,
+  policies, claims, middleware all keep working) so consumers see
+  the value in the first paragraph.
+- **`KNOWN-GAPS.md` audited and synced with the code.** Removed
+  stale entries that misrepresented current capabilities:
+  the "No bearer-token retrieval hook" gap (closed by
+  `OnMessageReceived` in v0.4), the "No `OnMessageReceived` event"
+  gap (same), and the "No coverage-guided fuzzing" gap (closed by
+  the SharpFuzz harness in v0.7). Existing accurate gaps preserved.
+- **NuGet `<Description>` and `<PackageReleaseNotes>` polished** —
+  tighter, adoption-focused, lead with the "same shape as
+  AddJwtBearer" pitch, name the companion package, surface
+  replay protection.
+
+### Tests
+
+- **66 tests, zero skips on PQ-capable hosts.** No new tests this
+  release — the changes are documentation + packaging.
+
+## [0.8.0-preview.1] — 2026-05-31
+
 ## [0.8.0-preview.1] — 2026-05-31
 
 A **documentation-and-examples** release. The library code is mature
@@ -500,7 +561,8 @@ release cadence.
 
 ---
 
-[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.8.0-preview.1...HEAD
+[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.9.0-preview.1...HEAD
+[0.9.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.8.0-preview.1...v0.9.0-preview.1
 [0.8.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.7.0-preview.1...v0.8.0-preview.1
 [0.7.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.6.0-preview.1...v0.7.0-preview.1
 [0.6.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.5.0-preview.1...v0.6.0-preview.1

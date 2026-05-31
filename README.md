@@ -5,13 +5,17 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 
-**The high-level ASP.NET Core integration for post-quantum JWT authentication.**
-One line of configuration — `AddPostQuantumJwtBearer(…)` — and hybrid
-ML-DSA-65 + X-Wing tokens slot into the standard authentication pipeline
-exactly the way `AddJwtBearer` always has. Built on
-[`PostQuantum.Jwt`](https://github.com/systemslibrarian/postquantum-jwt) and
-the native .NET 10 BCL post-quantum primitives. Fail-closed by construction,
-small surface, honest about its limits.
+**The high-level ASP.NET Core integration for post-quantum JWT
+authentication.** Add one line — `AddPostQuantumJwtBearer(…)` — and
+hybrid ML-DSA-65 + X-Wing tokens authenticate through the standard
+`AuthenticationBuilder` exactly the way `AddJwtBearer` always has.
+`[Authorize]` attributes, policies, role checks, claims, middleware —
+everything downstream of the wireup works **unchanged**, because the
+handler emits a real `ClaimsPrincipal`.
+
+Built on [`PostQuantum.Jwt`](https://github.com/systemslibrarian/postquantum-jwt)
+and the native .NET 10 BCL post-quantum primitives. Fail-closed by
+construction. Small surface. Honest about its limits.
 
 > **What this package *is*: a thin, opinionated **application layer** for
 > ASP.NET Core authentication.** Extension methods, an
@@ -32,18 +36,43 @@ small surface, honest about its limits.
 > **equivalent** that knows the right things about ML-DSA-65 — not a
 > reinvention of the crypto stack underneath.
 
-> **Status — `0.8.0-preview.1`.** Preview software. Not for production use.
+> **Status — `0.9.0-preview.1`.** Preview software. Not for production use.
 > The API may change before 1.0, and the underlying cryptographic construction
 > has not been independently audited. Read [`KNOWN-GAPS.md`](KNOWN-GAPS.md)
 > before depending on this for anything that matters.
 
+## Highlights
+
+- **One-line wireup** — `AddPostQuantumJwtBearer(…)` slots into the
+  standard `AuthenticationBuilder` exactly like `AddJwtBearer`.
+- **Fail-closed by construction** — every validation failure becomes
+  `401`. No `alg: none`, no algorithm fallback, no degraded path.
+- **Distributed replay protection** — single-use `jti` enforcement
+  across your fleet via the [`PostQuantum.AspNetCore.RedisReplayCache`](src/PostQuantum.AspNetCore.RedisReplayCache)
+  companion package (SET NX + remaining-token-TTL).
+- **JWKS-equivalent key rotation** — `IPostQuantumJwtKeyRing` with an
+  HTTP-backed implementation, atomic snapshot swap on refresh,
+  unknown-`kid` throttling, hosted-service startup warmup.
+- **Four event hooks** — `OnMessageReceived` (SignalR-style alternate
+  token transports), `OnTokenValidated` (enrich principal),
+  `OnAuthenticationFailed`, `OnChallenge`.
+- **First-class observability** — `System.Diagnostics.Metrics` + an
+  `ActivitySource` for OpenTelemetry / Prometheus / Application
+  Insights.
+- **AOT-compatible** — `IsAotCompatible=true`, verified end-to-end in
+  CI on Linux, Windows, and macOS.
+- **Honest about limits** — preview status, non-IANA algorithm
+  identifiers, no independent audit, every gap tracked in
+  [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
+
 > **In a hurry?** Jump straight to:
 >
 > - **[Getting started](docs/GETTING-STARTED.md)** — zero to working PQ API in 10 minutes.
+> - **[Migrating from `AddJwtBearer`](#migrating-from-addjwtbearer)** — side-by-side diff.
+> - **[Security model](docs/SECURITY-MODEL.md)** — what the library protects, what it doesn't, replay-protection requirements.
 > - **[Recipes](docs/RECIPES.md)** — copy-paste-able scenarios: Redis replay, OpenTelemetry, SignalR, multi-tenant, multi-scheme, Swagger, Docker/K8s.
 > - **[FAQ](docs/FAQ.md)** — should I use this in production? how big are tokens? does it work with Auth0? — and 15 more.
 > - **[Production checklist](docs/PRODUCTION-CHECKLIST.md)** — before user traffic hits.
-> - **[Migration guide](docs/MIGRATION.md)** — from `PostQuantum.Jwt.AspNetCore`.
 
 ---
 
@@ -92,6 +121,7 @@ looking for raw ML-DSA, ML-KEM, X25519, or AES-GCM, those live in the
 - [Public API at a glance](#public-api-at-a-glance)
 - [Defaults and what they mean](#defaults-and-what-they-mean)
 - [Compared to `Microsoft.AspNetCore.Authentication.JwtBearer`](#compared-to-microsoftaspnetcoreauthenticationjwtbearer)
+- [Migrating from `AddJwtBearer`](#migrating-from-addjwtbearer)
 - [Migrating from `PostQuantum.Jwt.AspNetCore`](#migrating-from-postquantumjwtaspnetcore)
 - [Security posture](#security-posture)
 - [Compatibility](#compatibility)
@@ -141,13 +171,13 @@ nothing else.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.AspNetCore --version 0.8.0-preview.1
+dotnet add package PostQuantum.AspNetCore --version 0.9.0-preview.1
 ```
 
 Or in a `.csproj`:
 
 ```xml
-<PackageReference Include="PostQuantum.AspNetCore" Version="0.8.0-preview.1" />
+<PackageReference Include="PostQuantum.AspNetCore" Version="0.9.0-preview.1" />
 ```
 
 **Runtime requirement:** the native ML-KEM / ML-DSA primitives need an
@@ -323,13 +353,15 @@ four async hooks for the moments that matter:
 Hook delegates default to no-ops, so leaving `Events` alone gives you
 the same behaviour as not having the hooks at all.
 
-### Distributed replay protection with Redis
+### Distributed replay protection with Redis ⭐ recommended for production
 
-`jti`-based single-use enforcement across every instance in your
-fleet. Install the companion package:
+A captured token shouldn't be reusable. **For any deployment with
+more than one instance, configure a distributed replay cache.** The
+companion package ships a Redis implementation that's a one-line
+wireup:
 
 ```bash
-dotnet add package PostQuantum.AspNetCore.RedisReplayCache --version 0.8.0-preview.1
+dotnet add package PostQuantum.AspNetCore.RedisReplayCache --version 0.9.0-preview.1
 ```
 
 ```csharp
@@ -337,19 +369,37 @@ using PostQuantum.AspNetCore.RedisReplayCache;
 
 builder.Services
     .AddAuthentication(PostQuantumJwtBearerDefaults.AuthenticationScheme)
-    .AddPostQuantumJwtBearer(options => { /* ... validation parameters ... */ });
+    .AddPostQuantumJwtBearer(options =>
+    {
+        options.ValidationParameters = new PqJwtValidationParameters
+        {
+            SignatureVerificationKey = verificationKey,
+            ValidIssuer   = "https://issuer.example",
+            ValidAudience = "https://api.example",
+        };
+    });
 
+// One line: registers RedisPqJwtReplayCache as a singleton, wires it
+// onto the scheme's ValidationParameters.ReplayCache via PostConfigure.
 builder.Services.AddPostQuantumJwtRedisReplayCache(
     connectionString: builder.Configuration["Redis:ConnectionString"]!);
 ```
 
-Under the hood: `SET key 1 NX PX {remaining-token-lifetime}`. First
-use wins, replays return false → validator throws → handler returns
-401. The TTL means the cache cleans itself up after token expiration.
+Under the hood: every accepted token issues a Redis `SET key 1 NX PX
+{remaining-token-lifetime}`. First use wins, replays return `false`
+→ validator throws `PqJwtValidationException` → handler returns `401`.
+The TTL means the cache cleans itself up after token expiration.
 
-The bundled in-process `InMemoryReplayCache` is for single-process
-deployments only; for anything else, use Redis (or implement your
-own `IPqJwtReplayCache` against your store).
+**Why this matters:** without a configured replay cache, the `jti`
+claim is carried by every token but **never enforced**. A captured
+token is reusable until it expires. The library is opt-in on this
+because single-process apps don't need a distributed cache — but for
+anything multi-instance, **this is the recommended production
+configuration**.
+
+The bundled `InMemoryReplayCache` from `PostQuantum.Jwt` works for
+single-process apps; the [`SECURITY-MODEL.md`](docs/SECURITY-MODEL.md#deployment-shape-matrix)
+documents the deployment-shape matrix in detail.
 
 ### OpenTelemetry: metrics and distributed tracing
 
@@ -563,17 +613,115 @@ these identifiers and standard libraries catch up.
 
 ---
 
+## Migrating from `AddJwtBearer`
+
+Moving from `Microsoft.AspNetCore.Authentication.JwtBearer` is
+deliberately a one-line change at the call site. The validation
+**model** is different (we use a static key or a custom JWKS-equivalent
+ring, not an OIDC `Authority`), but the **shape** is identical: same
+`AuthenticationBuilder`, same scheme name pattern, same
+`[Authorize]` attribute, same `ClaimsPrincipal` downstream. Most
+controllers, policies, and middleware need no change at all.
+
+### Side-by-side
+
+**Before** — classical `JwtBearer` against an OIDC provider:
+
+```csharp
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        // JwtBearer discovers signing keys from the OIDC metadata document.
+        options.Authority = "https://auth.example/";
+        options.Audience  = "https://api.example/";
+        options.TokenValidationParameters.ValidIssuer = "https://auth.example/";
+    });
+
+builder.Services.AddAuthorization();
+```
+
+**After** — post-quantum `AddPostQuantumJwtBearer` against your own issuer:
+
+```csharp
+using PostQuantum.AspNetCore;
+using PostQuantum.Jwt;
+
+builder.Services
+    .AddAuthentication(PostQuantumJwtBearerDefaults.AuthenticationScheme)
+    .AddPostQuantumJwtBearer(options =>
+    {
+        // No OIDC discovery — supply the ML-DSA-65 verification key directly
+        // (or via the JWKS-equivalent IPostQuantumJwtKeyRing for rotation).
+        options.ValidationParameters = new PqJwtValidationParameters
+        {
+            SignatureVerificationKey = verificationKey,
+            ValidIssuer   = "https://issuer.example",
+            ValidAudience = "https://api.example",
+        };
+    });
+
+builder.Services.AddAuthorization();
+```
+
+Everything downstream of those lines — `[Authorize]`,
+`[Authorize(Roles = "...")]`, policies, `User.FindFirst("sub")`,
+`HttpContext.User.IsAuthenticated` — works **unchanged**.
+
+### What's different
+
+| Concern                  | `AddJwtBearer`                                  | `AddPostQuantumJwtBearer`                                  |
+|--------------------------|-------------------------------------------------|------------------------------------------------------------|
+| Algorithms accepted      | Full IANA catalogue (RS/PS/ES/EdDSA/HS).        | Exactly one suite: `ML-DSA-65`.                            |
+| Key source               | `Authority` (OIDC discovery) or `IssuerSigningKey`. | `SignatureVerificationKey` (static) or `IPostQuantumJwtKeyRing` (dynamic). |
+| Identity provider integration | Auth0, IdentityServer, Microsoft Entra, etc. | You issue tokens via `PqJwtBuilder`. Not OIDC-compatible.   |
+| Token size               | ~200 bytes (HMAC) → ~1 KB (RSA).                | **~4.5 KB** (ML-DSA-65 signature is 3,309 bytes).          |
+| Algorithm agility        | Yes (and historically a source of CVEs).        | **No, by design.** Token's `alg` doesn't pick a code path. |
+| Replay protection        | Not built-in.                                   | Built-in via `IPqJwtReplayCache` + Redis companion (opt-in). |
+| Standards interop        | Tokens validate in any JWT library.             | Tokens are non-interoperable until IANA registers `ML-DSA-65`. |
+| Production maturity      | Yes — decade-hardened.                          | **Preview** — not audited, not for production.             |
+
+### Run both during migration
+
+You don't have to flip a switch — register both schemes and route
+specific endpoints to each:
+
+```csharp
+builder.Services
+    .AddAuthentication()
+    .AddJwtBearer("Classical", o => { o.Authority = "https://auth.example/"; })
+    .AddPostQuantumJwtBearer("PostQuantum", o =>
+    {
+        o.ValidationParameters = new PqJwtValidationParameters { /* ... */ };
+    });
+```
+
+```csharp
+[Authorize(AuthenticationSchemes = "PostQuantum")]
+public class PostQuantumOnlyController : ControllerBase { }
+
+[Authorize(AuthenticationSchemes = "Classical,PostQuantum")]
+public class EitherWorksController : ControllerBase { }
+```
+
+See [`docs/RECIPES.md` § 7](docs/RECIPES.md#7-coexist-with-the-standard-jwtbearer-scheme-during-migration)
+for the full coexistence pattern.
+
+---
+
 ## Migrating from `PostQuantum.Jwt.AspNetCore`
 
-`PostQuantum.AspNetCore` is the renamed, repackaged successor to the
-`PostQuantum.Jwt.AspNetCore` companion that ships from the engine
-repository. **Same engine, same shape, cleaner naming, its own release
-cadence.** The mapping is mechanical (`AddPqJwtBearer` →
-`AddPostQuantumJwtBearer`, `PqJwtBearer*` → `PostQuantumJwtBearer*`,
-`IPqJwtKeyRing` → `IPostQuantumJwtKeyRing`, …), and tokens minted by
-either package validate in the other.
+If you're on the legacy `PostQuantum.Jwt.AspNetCore` companion
+package (which shipped from the engine repository), `PostQuantum.AspNetCore`
+is its **renamed, repackaged successor**. Same engine, cleaner
+naming, its own release cadence. The mapping is mechanical
+(`AddPqJwtBearer` → `AddPostQuantumJwtBearer`, `PqJwtBearer*` →
+`PostQuantumJwtBearer*`, `IPqJwtKeyRing` → `IPostQuantumJwtKeyRing`),
+and tokens minted by either package validate in the other.
 
-See [`docs/MIGRATION.md`](docs/MIGRATION.md) for the full diff-style guide.
+See [`docs/MIGRATION.md`](docs/MIGRATION.md) for the diff-style guide.
 
 ---
 
@@ -663,6 +811,16 @@ process in [`SECURITY.md`](SECURITY.md).
 ## License
 
 [MIT](LICENSE).
+
+---
+
+## About this library
+
+This library was created by a human developer working in close
+collaboration with Claude, Gemini, Grok, and ChatGPT. The vision,
+direction, architecture decisions, and final curation were mine. The
+goal was simple: build something the .NET ecosystem genuinely needs
+for the post-quantum era.
 
 ---
 

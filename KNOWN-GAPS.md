@@ -5,7 +5,7 @@ do, what is unverified, and where the sharp edges are. Honesty over polish:
 if something is incomplete, it is listed here rather than glossed over. This
 file is part of the contract with anyone evaluating the package.
 
-Last reviewed for: `0.5.0-preview.1`.
+Last reviewed for: `0.6.0-preview.1`.
 
 ## Inherited from `PostQuantum.Jwt`
 

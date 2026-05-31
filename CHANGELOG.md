@@ -10,6 +10,47 @@ versions.
 
 _No changes yet._
 
+## [0.6.0-preview.1] — 2026-05-31
+
+A **trust-the-build** release. The library was already 54-tests-green
+before this — v0.6 is about closing the *I-cannot-tell-from-CI* gaps
+left in v0.5. Discovered (and fixed) one more real semantic bug along
+the way.
+
+### Fixed (correctness)
+
+- **`HttpPostQuantumJwtKeyRing.PreloadAsync` now propagates fetch
+  failures** instead of swallowing them. `Resolve` (the hot path) still
+  swallows: a flaky key endpoint should not turn an authenticated
+  request into a 500. But the warmup hosted service's `FailFastOnStartup`
+  contract said "fail host startup if the key endpoint is unreachable"
+  — and it had nothing to fail on, because `PreloadAsync` was sharing
+  the same catch-and-log path as `Resolve`. They now diverge:
+  `PreloadAsync` rethrows, `Resolve` doesn't. Found by the new
+  `WarmupIntegrationTests.WarmupFailFast_AbortsHostStartup_OnUnreachableEndpoint`.
+
+### Added
+
+- **`WarmupIntegrationTests`** — full-pipeline tests that wire
+  `AddPostQuantumJwtKeyRing(uri) + AddPostQuantumJwtKeyRingWarmup()`
+  against a stub HTTPS endpoint, start a real `Host`, and assert
+  (1) warmup actually preloads before the host considers itself
+  started, (2) the first authenticated request hits the warm cache
+  with **zero** additional fetches, and (3) fail-fast warmup
+  aborts host startup on an unreachable endpoint.
+- **Multi-platform AOT publish in CI.** The `aot-publish` job now runs
+  on Ubuntu (`linux-x64`), Windows (`win-x64`), and macOS (`osx-arm64`).
+  AOT linkers differ — clang, link.exe, ld64 — and a library that
+  publishes cleanly on one can still break on another. Three OS lanes
+  in CI catch the regression at PR time.
+- **Code-coverage gate in CI.** `dotnet test --collect:"XPlat Code
+  Coverage"` runs alongside the regular test step; `reportgenerator`
+  produces a Markdown summary that surfaces in the PR run's step
+  output. The build fails if line coverage drops below 75% (project
+  currently sits at **84.6%**). Coverage report uploaded as an
+  artifact with 14-day retention.
+- **2 new tests.** **56 total, zero skips on PQ-capable hosts.**
+
 ## [0.5.0-preview.1] — 2026-05-31
 
 A **production-depth** release. v0.4 finished the surface; v0.5 deepens

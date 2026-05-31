@@ -159,13 +159,28 @@ jobs:
           echo "PQ-required check passed on Linux: 0 skipped tests."
 
   aot-publish:
-    # Proves the library compiles AOT-clean end-to-end. The tiny
-    # tests/PostQuantum.AspNetCore.AotSmokeTest project exercises the public
-    # surface; running `dotnet publish -p:PublishAot=true` against it would
-    # surface any unannotated reflection in the library as an IL trim error
-    # (TreatWarningsAsErrors=true escalates them). Ubuntu has clang installed
-    # for the native-link step.
-    runs-on: ubuntu-latest
+    # Proves the library compiles AOT-clean end-to-end on every supported
+    # platform. The tiny tests/PostQuantum.AspNetCore.AotSmokeTest project
+    # exercises the public surface; running `dotnet publish -p:PublishAot=true`
+    # against it surfaces any unannotated reflection in the library as an IL
+    # trim error (TreatWarningsAsErrors=true escalates them).
+    #
+    # Why all three platforms: AOT linkers differ — clang on Linux, link.exe
+    # via the MSVC Build Tools on Windows, ld64 on macOS. A library that
+    # AOT-publishes cleanly on one can still break on another (RID-specific
+    # code paths, P/Invoke shape, native-library activation). PR-time catch
+    # beats post-release surprise.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: windows-latest
+            rid: win-x64
+          - os: macos-latest
+            rid: osx-arm64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - name: Set up .NET
@@ -173,12 +188,95 @@ jobs:
         with:
           global-json-file: global.json
       - name: AOT publish smoke test
+        shell: bash
         run: |
           set -euo pipefail
           dotnet publish tests/PostQuantum.AspNetCore.AotSmokeTest/PostQuantum.AspNetCore.AotSmokeTest.csproj \
             -c Release \
-            --runtime linux-x64 \
+            --runtime "${{ matrix.rid }}" \
             -p:PublishAot=true
+
+  coverage:
+    # Coverlet via the test project's `coverlet.collector` produces a
+    # Cobertura XML report. reportgenerator (a global tool) turns it into
+    # a Markdown summary in the GitHub Actions step output and enforces
+    # a line-coverage threshold; the build fails if line coverage drops
+    # below 75%, which is the floor the project targets during preview.
+    # The number isn't sacred — adjust deliberately when something
+    # legitimately hard-to-cover lands, and bump up when the suite catches
+    # up to new code.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Set up miniconda + OpenSSL 3.5
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: false
+          activate-environment: pq
+          channels: conda-forge
+
+      - name: Install OpenSSL 3.5+ from conda-forge
+        run: |
+          conda install -y -n pq -c conda-forge "openssl>=3.5"
+          echo "LD_LIBRARY_PATH=$CONDA/envs/pq/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Install reportgenerator
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Test with coverage
+        run: |
+          set -o pipefail
+          dotnet test tests/PostQuantum.AspNetCore.Tests/PostQuantum.AspNetCore.Tests.csproj \
+            -c Release \
+            --collect:"XPlat Code Coverage" \
+            --results-directory coverage \
+            --logger "console;verbosity=minimal"
+
+      - name: Generate coverage report and enforce threshold
+        run: |
+          set -euo pipefail
+          report=$(find coverage -name 'coverage.cobertura.xml' | head -1)
+          if [[ -z "$report" ]]; then
+            echo "::error::No coverage report found."
+            exit 1
+          fi
+          reportgenerator \
+            "-reports:$report" \
+            "-targetdir:coverage-report" \
+            "-reporttypes:MarkdownSummaryGithub;TextSummary" \
+            "-assemblyfilters:+PostQuantum.AspNetCore"
+
+          if [[ -f coverage-report/SummaryGithub.md ]]; then
+            cat coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Parse line-coverage % from the text summary and enforce floor.
+          line_cov=$(grep -oP 'Line coverage:\s*\K[0-9.]+' coverage-report/Summary.txt | head -1)
+          echo "Measured line coverage: ${line_cov}%"
+          floor=75
+          if (( $(echo "$line_cov < $floor" | bc -l) )); then
+            echo "::error::Line coverage ${line_cov}% is below the ${floor}% floor."
+            exit 1
+          fi
+          echo "Coverage gate passed (${line_cov}% >= ${floor}%)."
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-report
+          path: coverage-report/
+          if-no-files-found: ignore
+          retention-days: 14
 
   pack-verify:
     # Make sure the package itself builds cleanly on every PR — catches

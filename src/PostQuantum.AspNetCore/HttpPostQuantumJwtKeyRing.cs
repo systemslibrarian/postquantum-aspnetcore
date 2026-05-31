@@ -102,8 +102,12 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
             return cached;
         }
 
-        // Unknown kid → give the directory one chance to refresh.
-        await RefreshAsync(force: true, cancellationToken).ConfigureAwait(false);
+        // Unknown kid → give the directory one chance to refresh. The hot
+        // path swallows fetch failures (logs them as a Warning) so a flaky
+        // key endpoint doesn't surface as a 500 to the user — Resolve will
+        // simply return null, the engine's SignatureKeyResolver will see
+        // the miss, and the request will fail closed at the auth layer.
+        await RefreshAsync(force: true, throwOnFailure: false, cancellationToken).ConfigureAwait(false);
         if (_cache.TryGetValue(keyId, out var resolved))
         {
             PostQuantumJwtBearerDiagnostics.KeyRingResolve.Add(1,
@@ -117,15 +121,23 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
     }
 
     /// <summary>
-    /// Preloads the directory. Optional — used by tests and by hosts that
-    /// want to fail at startup if the key endpoint is unreachable.
+    /// Preloads the directory. Used by the warmup hosted service to warm
+    /// the cache at host startup; failures here propagate so that
+    /// <see cref="PostQuantumJwtKeyRingWarmupOptions.FailFastOnStartup"/>
+    /// can decide whether to abort startup or proceed best-effort.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task that completes when the directory has been fetched (or has failed).</returns>
+    /// <returns>A task that completes when the directory has been fetched. The task faults if the fetch fails.</returns>
+    /// <remarks>
+    /// In contrast with <see cref="Resolve"/>, this method does
+    /// <strong>not</strong> swallow HTTP / JSON / cancellation failures.
+    /// Network errors at startup are usually the operator wanting to
+    /// know — that's the whole point of warmup.
+    /// </remarks>
     public Task PreloadAsync(CancellationToken cancellationToken = default)
-        => RefreshAsync(force: true, cancellationToken);
+        => RefreshAsync(force: true, throwOnFailure: true, cancellationToken);
 
-    private async Task RefreshAsync(bool force, CancellationToken cancellationToken = default)
+    private async Task RefreshAsync(bool force, bool throwOnFailure, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -210,15 +222,22 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or TaskCanceledException)
         {
-            // Network / parse failures (including server-side timeouts surfacing
-            // as TaskCanceledException with no caller cancellation) are logged
-            // and swallowed — Resolve() will return null for an unknown kid,
-            // which surfaces upstream as a fail-closed signature-resolver miss.
+            // Network / parse failures (including server-side timeouts
+            // surfacing as TaskCanceledException with no caller cancellation):
+            // record the metric, log the warning, then either rethrow or
+            // swallow based on the caller's intent. Resolve()'s cold-miss
+            // path passes throwOnFailure=false so a flaky key endpoint
+            // doesn't propagate as a 500; PreloadAsync passes
+            // throwOnFailure=true so warmup can fail host startup.
             fetchStopwatch.Stop();
             PostQuantumJwtBearerDiagnostics.KeyRingFetchLatency.Record(
                 fetchStopwatch.Elapsed.TotalMilliseconds,
                 new KeyValuePair<string, object?>("result", "failure"));
             _logger?.KeyRingFetchFailed(ex, _endpoint);
+            if (throwOnFailure)
+            {
+                throw;
+            }
         }
         finally
         {

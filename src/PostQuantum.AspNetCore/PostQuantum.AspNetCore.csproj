@@ -17,7 +17,7 @@
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <PackageId>PostQuantum.AspNetCore</PackageId>
-    <Version>0.5.0-preview.1</Version>
+    <Version>0.6.0-preview.1</Version>
     <Title>PostQuantum.AspNetCore — quantum-resistant JWT bearer auth for ASP.NET Core</Title>
     <Authors>Paul Clark</Authors>
     <Description>High-level ASP.NET Core integration for post-quantum JWT authentication. This is the application-layer wiring — extension methods, an AuthenticationHandler, event hooks, a JWKS-equivalent key ring, hosted-service warmup, metrics, and tracing — NOT a cryptography library. The actual ML-DSA-65 / X-Wing / AES-GCM work happens in PostQuantum.Jwt and the .NET 10 BCL primitives. We don't compete with BouncyCastle or liboqs; we sit on top of them. Adds AddPostQuantumJwtBearer() so hybrid ML-DSA-65 + X-Wing tokens slot into the standard ASP.NET Core authentication pipeline exactly the way AddJwtBearer always has. Fail-closed by construction, AOT-compatible, with metrics and tracing emitted via System.Diagnostics. Preview release — not for production use.</Description>
@@ -27,7 +27,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>jwt;jose;jwe;post-quantum;pqc;ml-dsa;ml-kem;x-wing;hybrid;aspnetcore;authentication;jwtbearer;net10</PackageTags>
-    <PackageReleaseNotes>0.5.0-preview.1: Production-depth release. Two real fail-open bugs found by new fuzz tests and fixed (handler now catches the broader PqJwtException family AND any non-fatal exception from Validate, so engine leaks like FormatException no longer escape as 500s). New: System.Diagnostics.Metrics + ActivitySource instrumentation (Meter "PostQuantum.AspNetCore" with auth success/failure counters, latency histograms, key-ring lookup tags; ActivitySource for distributed tracing). AOT publishing verified end-to-end via tests/PostQuantum.AspNetCore.AotSmokeTest and locked by a new aot-publish CI job. BenchmarkDotNet project at benchmarks/. Seeded property-flavoured fuzz on the header helpers (1000 iterations each). Repo hygiene: Dependabot config, docs/API-STABILITY.md, docs/PERFORMANCE.md, docs/audits/. Crystal-clear messaging that this is the high-level ASP.NET Core integration, NOT a low-level crypto library. Tests: 54 (was 40), zero skips. Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.6.0-preview.1: Trust-the-build release. New: end-to-end warmup integration test that revealed and fixed a real semantic gap — PreloadAsync was swallowing fetch failures alongside Resolve's hot path, so warmup's FailFastOnStartup had nothing to fail on. Now PreloadAsync propagates fetch errors (so the operator finds out at startup); Resolve still swallows on the hot path (so a flaky key endpoint doesn't surface as 500s). New CI: multi-platform AOT publish (Linux + Windows + macOS) catches RID-specific regressions before release; coverage gate at 75% line coverage (project currently runs at 84.6%) with Markdown summary in the PR run. Tests: 56 (was 54), zero skips. Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md.</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Copyright>Copyright © Paul Clark</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>

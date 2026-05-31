@@ -10,6 +10,65 @@ versions.
 
 _No changes yet._
 
+## [1.0.0-preview.1] — 2026-05-31
+
+**First release-candidate-preview cut.** Same API surface as
+`0.9.1-preview.1`; the version bump signals that we believe the
+public API is what we expect to ship as `1.0.0`. The `-preview.1`
+suffix maintains honest preview status — the cryptographic
+construction in the underlying engine library has not yet been
+independently audited, and IANA has not registered the `ML-DSA-65`
+identifier the library uses. Until those gates are closed,
+`1.0.0` proper is not appropriate; this preview line is the
+runway.
+
+### Changed
+
+- **Version bump only.** No source changes vs `0.9.1-preview.1`.
+- **csproj metadata refreshed** for 1.0-preview semantics —
+  `<Description>` tightened, `<PackageReleaseNotes>` rewritten
+  to summarise the full feature set rather than a single release's
+  diff, in case this is a consumer's first encounter with the
+  package on nuget.org.
+
+### What's in 1.0.0-preview.1 (cumulative through 0.9.x)
+
+- **`AddPostQuantumJwtBearer()`** one-line wireup that slots into the
+  standard `AuthenticationBuilder`. `[Authorize]`, policies, role
+  checks, and middleware all work unchanged.
+- **Fail-closed validation handler** with defense-in-depth catch of
+  every non-fatal exception out of `Validate()`. Engine-level
+  parser leaks no longer surface as 500s.
+- **JWKS-equivalent key rotation** via `IPostQuantumJwtKeyRing` +
+  `HttpPostQuantumJwtKeyRing`. Atomic snapshot swap on refresh.
+  Unknown-`kid` throttling. Hosted-service startup warmup
+  (`AddPostQuantumJwtKeyRingWarmup`).
+- **Four event hooks** — `OnMessageReceived` (alternate token
+  transports including SignalR `?access_token=`), `OnTokenValidated`,
+  `OnAuthenticationFailed`, `OnChallenge`.
+- **Distributed replay protection** — `PostQuantum.AspNetCore.RedisReplayCache`
+  companion package; one-line `AddPostQuantumJwtRedisReplayCache(...)`.
+- **First-class observability** — `System.Diagnostics.Metrics`
+  (`postquantum.jwt.auth.success/failure/latency`,
+  `postquantum.jwt.keyring.resolve/fetch.latency`) +
+  `ActivitySource` (`PostQuantum.AspNetCore`) for OpenTelemetry.
+- **AOT-compatible** — `IsAotCompatible=true`, verified end-to-end
+  in CI on Linux, Windows, and macOS.
+- **Documentation** — SECURITY-MODEL, GETTING-STARTED, RECIPES
+  (13 scenarios), FAQ, PRODUCTION-CHECKLIST, MIGRATION (from both
+  `AddJwtBearer` and `PostQuantum.Jwt.AspNetCore`), DIAGNOSTICS,
+  PERFORMANCE, API-STABILITY, MUTATION-TESTING, audit trail under
+  `docs/audits/`.
+- **Samples** — minimal API, SignalR (in-page browser client),
+  MVC with controllers + role/policy authorization.
+- **66 tests**, zero skips on PQ-capable hosts. CI lanes: build+test
+  on Ubuntu and Windows, linux-pq-required with OpenSSL 3.5+ via
+  conda-forge, multi-platform AOT publish, code coverage with a 75%
+  floor (project sits at ~84.6%), version-sync gate, format-verify
+  gate, pack-verify, release workflow with `nuget-publish` env gate
+  + SHA256SUMS + build-provenance attestations + optional author
+  signing.
+
 ## [0.9.1-preview.1] — 2026-05-31
 
 A **follow-up polish** release on the 0.9 trust-and-adoption pass.
@@ -597,7 +656,8 @@ release cadence.
 
 ---
 
-[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.9.1-preview.1...HEAD
+[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v1.0.0-preview.1...HEAD
+[1.0.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.9.1-preview.1...v1.0.0-preview.1
 [0.9.1-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.9.0-preview.1...v0.9.1-preview.1
 [0.9.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.8.0-preview.1...v0.9.0-preview.1
 [0.8.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.7.0-preview.1...v0.8.0-preview.1

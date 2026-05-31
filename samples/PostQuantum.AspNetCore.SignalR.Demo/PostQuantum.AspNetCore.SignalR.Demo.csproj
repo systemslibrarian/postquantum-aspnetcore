@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PostQuantum.AspNetCore.SignalR.Demo</RootNamespace>
+    <AssemblyName>PostQuantum.AspNetCore.SignalR.Demo</AssemblyName>
+    <UserSecretsId>postquantum-aspnetcore-signalr-demo</UserSecretsId>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CA1014</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/PostQuantum.AspNetCore/PostQuantum.AspNetCore.csproj" />
+  </ItemGroup>
+
+</Project>

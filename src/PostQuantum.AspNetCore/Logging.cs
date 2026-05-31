@@ -30,4 +30,28 @@ internal static partial class Logging
         Level = LogLevel.Warning,
         Message = "Post-quantum JWT key ring fetch from {Endpoint} failed.")]
     public static partial void KeyRingFetchFailed(this ILogger logger, Exception exception, Uri endpoint);
+
+    [LoggerMessage(
+        EventId = 5,
+        Level = LogLevel.Information,
+        Message = "Post-quantum JWT key ring warmup completed.")]
+    public static partial void WarmupSucceeded(this ILogger logger);
+
+    [LoggerMessage(
+        EventId = 6,
+        Level = LogLevel.Error,
+        Message = "Post-quantum JWT key ring warmup failed; host startup will fail (FailFastOnStartup=true).")]
+    public static partial void WarmupFailedFailFast(this ILogger logger, Exception exception);
+
+    [LoggerMessage(
+        EventId = 7,
+        Level = LogLevel.Warning,
+        Message = "Post-quantum JWT key ring warmup failed; continuing best-effort (FailFastOnStartup=false). Cache will populate on first miss.")]
+    public static partial void WarmupFailedBestEffort(this ILogger logger, Exception exception);
+
+    [LoggerMessage(
+        EventId = 8,
+        Level = LogLevel.Warning,
+        Message = "Post-quantum JWT key ring periodic refresh tick failed.")]
+    public static partial void PeriodicRefreshFailed(this ILogger logger, Exception exception);
 }

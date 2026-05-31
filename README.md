@@ -13,7 +13,7 @@ exactly the way `AddJwtBearer` always has. Built on
 the native .NET 10 BCL post-quantum primitives. Fail-closed by construction,
 small surface, honest about its limits.
 
-> **Status — `0.3.0-preview.1`.** Preview software. Not for production use.
+> **Status — `0.4.0-preview.1`.** Preview software. Not for production use.
 > The API may change before 1.0, and the underlying cryptographic construction
 > has not been independently audited. Read [`KNOWN-GAPS.md`](KNOWN-GAPS.md)
 > before depending on this for anything that matters.
@@ -70,13 +70,13 @@ nothing else.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.AspNetCore --version 0.3.0-preview.1
+dotnet add package PostQuantum.AspNetCore --version 0.4.0-preview.1
 ```
 
 Or in a `.csproj`:
 
 ```xml
-<PackageReference Include="PostQuantum.AspNetCore" Version="0.3.0-preview.1" />
+<PackageReference Include="PostQuantum.AspNetCore" Version="0.4.0-preview.1" />
 ```
 
 **Runtime requirement:** the native ML-KEM / ML-DSA primitives need an
@@ -139,6 +139,16 @@ dotnet run --project samples/PostQuantum.AspNetCore.Demo
 # in another shell
 TOKEN=$(curl -s -X POST http://localhost:5000/dev/token | jq -r .token)
 curl -H "Authorization: Bearer $TOKEN" http://localhost:5000/me
+```
+
+A second sample — [`samples/PostQuantum.AspNetCore.SignalR.Demo`](samples/PostQuantum.AspNetCore.SignalR.Demo)
+— exercises the `OnMessageReceived` event end-to-end against a real
+SignalR hub with the canonical `?access_token=` connection pattern,
+plus an in-page browser client so the whole loop runs in one process:
+
+```bash
+dotnet run --project samples/PostQuantum.AspNetCore.SignalR.Demo
+# browse to http://localhost:5050/
 ```
 
 ---
@@ -263,6 +273,28 @@ For a non-HTTP key source (database, KMS, file), supply your own
 builder.Services.AddPostQuantumJwtKeyRing<MyDatabaseKeyRing>();
 ```
 
+**Warm the cache at startup.** A cold cache means the first
+authentication request pays a network round trip while every other
+request waits. Register the hosted-service warmup helper to preload at
+host start (and optionally on a periodic timer so removed keys drop
+out without waiting for an unknown-`kid` miss):
+
+```csharp
+builder.Services.AddPostQuantumJwtKeyRing(
+    new Uri(builder.Configuration["Auth:KeysEndpoint"]!));
+
+builder.Services.AddPostQuantumJwtKeyRingWarmup(options =>
+{
+    options.FailFastOnStartup = true;                // default
+    options.RefreshInterval   = TimeSpan.FromMinutes(15);
+});
+```
+
+`FailFastOnStartup` (default `true`) makes a startup-time fetch failure
+abort the host — strict, but matches the engine library's fail-closed
+ethos. Set it to `false` for best-effort warmup that logs and lets the
+host come up; the first cache miss will then drive a refresh as usual.
+
 The expected key-directory document is JSON:
 
 ```json
@@ -312,6 +344,7 @@ public class ProtectedController : ControllerBase { /* ... */ }
 | `IPostQuantumJwtKeyRing`                 | JWKS-equivalent abstraction for `kid → MLDsa` resolution (sync + async). |
 | `HttpPostQuantumJwtKeyRing`              | HTTP-backed key ring with refresh, in-memory cache, atomic snapshot swap, AOT-safe JSON. |
 | `PostQuantumJwtKeyRingExtensions`        | `AddPostQuantumJwtKeyRing(...)` DI helpers (HTTP and generic).         |
+| `PostQuantumJwtKeyRingWarmupExtensions`  | `AddPostQuantumJwtKeyRingWarmup(...)` — hosted-service preload + periodic refresh. |
 | `PostQuantumJwtKeyDirectory` / `…KeyEntry` | DTOs for the key-directory wire format.                              |
 
 ---

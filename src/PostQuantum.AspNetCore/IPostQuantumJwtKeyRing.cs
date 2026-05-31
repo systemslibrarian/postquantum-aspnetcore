@@ -50,4 +50,22 @@ public interface IPostQuantumJwtKeyRing
     /// </remarks>
     ValueTask<MLDsa?> ResolveAsync(string? keyId, CancellationToken cancellationToken = default)
         => new(Resolve(keyId));
+
+    /// <summary>
+    /// Optionally pre-loads the ring's key cache so the first authentication
+    /// request doesn't pay a cold-start fetch. Implementations that do not
+    /// need warmup (e.g. an in-memory ring populated at construction) can
+    /// inherit the default no-op behaviour.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the cache has been warmed.</returns>
+    /// <remarks>
+    /// Typically called from a hosted service registered via
+    /// <c>services.AddPostQuantumJwtKeyRingWarmup(...)</c>. May throw if
+    /// the underlying source is unreachable and the caller wants
+    /// fail-fast startup semantics; the warmup helper exposes that
+    /// behaviour as an option.
+    /// </remarks>
+    Task PreloadAsync(CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
 }

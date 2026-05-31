@@ -10,6 +10,47 @@ versions.
 
 _No changes yet._
 
+## [0.4.0-preview.1] — 2026-05-31
+
+A **surface-completion** release. v0.3 fixed correctness; v0.4 fills in
+the last two API gaps a "definitive" ASP.NET Core integration needs
+(cold-start warmup, SignalR proof) and formalises the supersession of
+the legacy `PostQuantum.Jwt.AspNetCore` companion.
+
+### Added
+
+- **`AddPostQuantumJwtKeyRingWarmup(...)` hosted-service helper.**
+  Registers an `IHostedService` that calls
+  `IPostQuantumJwtKeyRing.PreloadAsync` on host startup and (optionally)
+  on a periodic timer. By default, warmup is **fail-fast** — a key
+  endpoint that's unreachable at startup aborts host start; set
+  `FailFastOnStartup=false` for best-effort warmup that logs and
+  continues. Closes the cold-start gap: the first validation request no
+  longer pays a network round trip, and a removed `kid` is evicted on
+  the next periodic tick rather than waiting for an unknown-`kid` miss.
+- **`PreloadAsync` lifted onto `IPostQuantumJwtKeyRing`** with a no-op
+  default implementation. `HttpPostQuantumJwtKeyRing` already had the
+  method; the lift is what lets the warmup helper work generically
+  against any ring (database-backed, KMS-backed, etc.).
+- **`samples/PostQuantum.AspNetCore.SignalR.Demo`.** A complete one-process
+  sample: token-minting endpoint, SignalR hub, in-page browser client.
+  Proves the `OnMessageReceived` event end-to-end with the canonical
+  SignalR `?access_token=` query-string pattern — not just in a unit
+  test.
+- **5 new tests** for warmup behaviour: initial preload fires once,
+  fail-fast propagates exceptions, best-effort swallows them, periodic
+  refresh fires on the timer (with a small FakeTimeProvider stub), the
+  DI helper registers the hosted service correctly. **40 tests total,
+  zero skips on PQ-capable hosts.**
+
+### Changed
+
+- **Engine repo's `PostQuantum.Jwt.AspNetCore` is now formally
+  superseded** by this package. The engine companion's `<Description>`,
+  `<PackageReleaseNotes>`, README, and CHANGELOG were updated in a
+  parallel commit on that repo (postquantum-jwt#1a3d6a2). Tokens minted
+  under either package validate in the other — same engine.
+
 ## [0.3.0-preview.1] — 2026-05-30
 
 A **10/10 audit pass** release. A self-imposed code review turned up four
@@ -226,7 +267,8 @@ release cadence.
 
 ---
 
-[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.3.0-preview.1...HEAD
+[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.4.0-preview.1...HEAD
+[0.4.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.3.0-preview.1...v0.4.0-preview.1
 [0.3.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.2.0-preview.1...v0.3.0-preview.1
 [0.2.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.1.0-preview.1...v0.2.0-preview.1
 [0.1.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/releases/tag/v0.1.0-preview.1

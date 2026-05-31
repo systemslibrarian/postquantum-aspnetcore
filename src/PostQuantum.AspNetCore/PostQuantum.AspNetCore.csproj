@@ -17,7 +17,7 @@
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <PackageId>PostQuantum.AspNetCore</PackageId>
-    <Version>0.3.0-preview.1</Version>
+    <Version>0.4.0-preview.1</Version>
     <Title>PostQuantum.AspNetCore — quantum-resistant JWT bearer auth for ASP.NET Core</Title>
     <Authors>Paul Clark</Authors>
     <Description>The definitive ASP.NET Core integration for post-quantum JWT authentication. Adds AddPostQuantumJwtBearer() so hybrid ML-DSA-65 + X-Wing (X25519 / ML-KEM-768) tokens slot into the standard authentication pipeline. Built on the native .NET 10 BCL post-quantum primitives via PostQuantum.Jwt. Fail-closed by construction, small surface, honest about its limits. Includes an event-hook surface (OnTokenValidated / OnAuthenticationFailed / OnChallenge), an HTTP-fetched key ring with async resolution, end-to-end integration tests, and a CycloneDX SBOM packed inside the .nupkg. Preview release — not for production use.</Description>
@@ -27,7 +27,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>jwt;jose;jwe;post-quantum;pqc;ml-dsa;ml-kem;x-wing;hybrid;aspnetcore;authentication;jwtbearer;net10</PackageTags>
-    <PackageReleaseNotes>0.3.0-preview.1: A 10/10 audit pass. Real correctness bugs fixed: HttpPostQuantumJwtKeyRing no longer disposes MLDsa instances under in-flight validations (atomic snapshot swap on refresh; deferred to GC); caller cancellation propagates from ResolveAsync; WWW-Authenticate realm is now RFC 7235-compliant quoted-string escaped; Bearer prefix match is case-insensitive (RFC 6750). New surface: OnMessageReceived event (SignalR-style alternate token transports); PostQuantumJwtBearerOptions.KeyRing + the AddPostQuantumJwtKeyRing(...) DI helper that replaces the README's old BuildServiceProvider anti-pattern; Options.Validate() override that fails startup on a missing key source. Tests: 31, zero skips. Docs: ADR for the single-suite decision, production checklist, diagnostics guide, CONTRIBUTING + code of conduct + issue/PR templates. CI: version-sync script, dotnet format verify-no-changes job. Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.4.0-preview.1: Surface-completion release. New AddPostQuantumJwtKeyRingWarmup() hosted-service helper closes the cold-start gap (warms IPostQuantumJwtKeyRing at host startup, with optional periodic refresh; fail-fast or best-effort modes). PreloadAsync lifted onto IPostQuantumJwtKeyRing with a no-op default so non-HTTP rings can opt in. New samples/PostQuantum.AspNetCore.SignalR.Demo proves OnMessageReceived end-to-end via SignalR's ?access_token= pattern with an in-page browser client. Sibling PostQuantum.Jwt.AspNetCore is now formally marked superseded in the engine repo. Tests: 40 (was 35), zero skips. Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md.</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Copyright>Copyright © Paul Clark</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>

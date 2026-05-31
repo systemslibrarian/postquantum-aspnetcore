@@ -12,16 +12,15 @@
     },
     "mutate": [
       "src/PostQuantum.AspNetCore/**/*.cs",
-      "!src/PostQuantum.AspNetCore/AssemblyInfo.cs"
-    ],
-    "ignore-mutations": [
-      "string"
+      "!src/PostQuantum.AspNetCore/AssemblyInfo.cs",
+      "!src/PostQuantum.AspNetCore/Logging.cs"
     ],
     "ignore-methods": [
-      "*Logging*",
       "ArgumentNullException.ThrowIfNull",
-      "ArgumentException.ThrowIfNullOrEmpty"
+      "ArgumentException.ThrowIfNullOrEmpty",
+      "ObjectDisposedException.ThrowIf"
     ],
+    "coverage-analysis": "off",
     "language-version": "latest"
   }
 }

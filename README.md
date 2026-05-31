@@ -32,7 +32,7 @@ small surface, honest about its limits.
 > **equivalent** that knows the right things about ML-DSA-65 — not a
 > reinvention of the crypto stack underneath.
 
-> **Status — `0.6.0-preview.1`.** Preview software. Not for production use.
+> **Status — `0.7.0-preview.1`.** Preview software. Not for production use.
 > The API may change before 1.0, and the underlying cryptographic construction
 > has not been independently audited. Read [`KNOWN-GAPS.md`](KNOWN-GAPS.md)
 > before depending on this for anything that matters.
@@ -129,13 +129,13 @@ nothing else.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.AspNetCore --version 0.6.0-preview.1
+dotnet add package PostQuantum.AspNetCore --version 0.7.0-preview.1
 ```
 
 Or in a `.csproj`:
 
 ```xml
-<PackageReference Include="PostQuantum.AspNetCore" Version="0.6.0-preview.1" />
+<PackageReference Include="PostQuantum.AspNetCore" Version="0.7.0-preview.1" />
 ```
 
 **Runtime requirement:** the native ML-KEM / ML-DSA primitives need an

@@ -10,6 +10,52 @@ versions.
 
 _No changes yet._
 
+## [0.7.0-preview.1] — 2026-05-31
+
+A **companion + depth** release. v0.6 was 56-tests-green; v0.7 adds the
+last residual items from the v0.5 audit-tier list: a Redis-backed
+`IPqJwtReplayCache` reference, a coverage-guided fuzz harness, and a
+cross-repo engine-side wrap of parser-level exceptions.
+
+### Added
+
+- **`PostQuantum.AspNetCore.RedisReplayCache`** — new sibling NuGet
+  package implementing `IPqJwtReplayCache` against
+  StackExchange.Redis. Uses `SET key 1 NX PX {ttl}` for atomic
+  single-use-`jti` enforcement across a Redis cluster. TTL = remaining
+  token lifetime (capped at 30 days for adversarial-clock cases).
+  `AddPostQuantumJwtRedisReplayCache(connectionString)` DI helper
+  registers the cache and weaves it into the named scheme's
+  `PqJwtValidationParameters.ReplayCache` via `PostConfigure`. 10 new
+  tests against an NSubstitute IDatabase stub.
+- **`tests/PostQuantum.AspNetCore.Fuzz`** — coverage-guided fuzz
+  harness via SharpFuzz + libfuzzer-dotnet. Targets
+  `PqJwtValidator.Validate` (the most interesting parser in the
+  stack). Includes seed corpus, README documenting the local-run
+  workflow. Complements the in-process structured fuzz tests in
+  `FuzzTests` (which run in CI on every push); the SharpFuzz harness
+  is for deeper soaks.
+- **`docs/MUTATION-TESTING.md`** — honest record of the Stryker.NET
+  configuration, the runs we tried, and why the baseline still doesn't
+  produce a usable mutation score on this project shape (likely
+  xunit-v3 + NSubstitute test-discovery limitation). Configuration
+  preserved for a future retry; in the meantime the in-process fuzz
+  catches the equivalents *it* can catch (and has — twice).
+- **12 new tests.** **66 total, zero skips on PQ-capable hosts.**
+
+### Changed
+
+- **Engine-side wrap (cross-repo).** `PostQuantum.Jwt`'s
+  `PqJwtValidator.Validate` now wraps parser-level
+  `FormatException`, `JsonException`, and `CryptographicException` as
+  `PqJwtValidationException` (engine commit `postquantum-jwt@0b405c7`).
+  This is the engine side of the v0.5 fail-closed fix: this package's
+  handler still has the broader catch as defense-in-depth, but
+  consumers calling `PqJwtValidator.Validate` directly now see the
+  documented `PqJwtException` family for every fail-closed path
+  instead of three different raw types. Two new tests landed in the
+  engine repo's `PqJwtEdgeCaseTests` to lock the contract.
+
 ## [0.6.0-preview.1] — 2026-05-31
 
 A **trust-the-build** release. The library was already 54-tests-green

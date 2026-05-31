@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PostQuantum.AspNetCore.RedisReplayCache</RootNamespace>
+    <AssemblyName>PostQuantum.AspNetCore.RedisReplayCache</AssemblyName>
+    <IsTrimmable>true</IsTrimmable>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>PostQuantum.AspNetCore.RedisReplayCache</PackageId>
+    <Version>0.7.0-preview.1</Version>
+    <Title>PostQuantum.AspNetCore.RedisReplayCache — Redis-backed jti replay cache for PostQuantum.Jwt</Title>
+    <Authors>Paul Clark</Authors>
+    <Description>A Redis-backed implementation of PostQuantum.Jwt's IPqJwtReplayCache, intended for horizontally-scaled deployments of PostQuantum.AspNetCore. Uses StackExchange.Redis SET NX with TTL = remaining token lifetime, so single-use jti enforcement coordinates across all instances. Companion to PostQuantum.AspNetCore. Preview release — not for production use.</Description>
+    <PackageProjectUrl>https://github.com/systemslibrarian/postquantum-aspnetcore</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/systemslibrarian/postquantum-aspnetcore</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>jwt;post-quantum;pqc;ml-dsa;replay-cache;redis;jti;aspnetcore;net10</PackageTags>
+    <PackageReleaseNotes>0.7.0-preview.1: Initial reference implementation. RedisPqJwtReplayCache + AddPostQuantumJwtRedisReplayCache(...) DI helper. Uses SET NX with TTL for single-use jti across a cluster.</PackageReleaseNotes>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <Copyright>Copyright © Paul Clark</Copyright>
+    <NeutralLanguage>en-US</NeutralLanguage>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <EnablePackageValidation>true</EnablePackageValidation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <InternalsVisibleTo Include="PostQuantum.AspNetCore.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../PostQuantum.AspNetCore/PostQuantum.AspNetCore.csproj" />
+    <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

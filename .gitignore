@@ -5,10 +5,11 @@ artifacts/
 *.user
 *.suo
 
-# IDE
+# IDE / tool runtime state
 .vs/
 .vscode/
 .idea/
+.claude/
 
 # Logs
 *.log

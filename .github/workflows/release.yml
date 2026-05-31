@@ -1,14 +1,27 @@
 name: Release
 
-# Publishes the NuGet package when a version tag (e.g. v0.1.0-preview.1) is
-# pushed. Requires the NUGET_API_KEY secret on the 'nuget-publish'
-# environment to push to nuget.org. Optional NUGET_SIGNING_CERT
-# (+ NUGET_SIGNING_CERT_PASSWORD) on the same environment enables author
-# code signing of the .nupkg before push.
+# Builds, packs, and attests every `v*` tag push (transparency signals —
+# SBOM, SHA256SUMS, build-provenance attestations — get published as
+# workflow artifacts). The actual nuget.org PUSH is gated behind a
+# manual `workflow_dispatch` with `publish: true`, because the
+# maintainer publishes from the command line. A tag push alone will
+# NEVER push to nuget.org — only the explicit manual dispatch will.
+#
+# If you want to publish via CI:
+#   Actions → Release → Run workflow → check "Push packages to nuget.org"
+# That run requires the `nuget-publish` GitHub Environment + the
+# `NUGET_API_KEY` secret + an approver.
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Push packages to nuget.org after packing (otherwise this run only packs)'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -30,15 +43,20 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Resolve and verify package version against tag
+      - name: Resolve and verify package version
         id: version
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME#v}"
           csproj_version=$(grep -oP '(?<=<Version>)[^<]+' src/PostQuantum.AspNetCore/PostQuantum.AspNetCore.csproj)
-          if [ "$tag" != "$csproj_version" ]; then
-            echo "::error::Tag version ($tag) does not match csproj <Version> ($csproj_version)."
-            exit 1
+          # When triggered by a tag push, verify the tag matches the csproj.
+          # When triggered by workflow_dispatch, there's no tag — accept the
+          # csproj version as the source of truth.
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            tag="${GITHUB_REF_NAME#v}"
+            if [ "$tag" != "$csproj_version" ]; then
+              echo "::error::Tag version ($tag) does not match csproj <Version> ($csproj_version)."
+              exit 1
+            fi
           fi
           echo "package_version=$csproj_version" >> "$GITHUB_OUTPUT"
 
@@ -96,10 +114,11 @@ jobs:
 
   publish:
     needs: pack
-    # Bind to a GitHub Environment so an approver can gate the actual push to
-    # nuget.org. Configure the 'nuget-publish' environment in repo settings
-    # and add NUGET_API_KEY there (not as a plain repo secret) to enforce
-    # review.
+    # NEVER runs on tag push. Requires an explicit manual workflow_dispatch
+    # with `publish: true`. The maintainer publishes from the command line;
+    # this job exists as a documented escape hatch and is gated so it can't
+    # fire by accident.
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true
     environment: nuget-publish
     runs-on: ubuntu-latest
     permissions:

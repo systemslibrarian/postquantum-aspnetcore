@@ -17,7 +17,7 @@
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <PackageId>PostQuantum.AspNetCore</PackageId>
-    <Version>0.7.0-preview.1</Version>
+    <Version>0.8.0-preview.1</Version>
     <Title>PostQuantum.AspNetCore — quantum-resistant JWT bearer auth for ASP.NET Core</Title>
     <Authors>Paul Clark</Authors>
     <Description>High-level ASP.NET Core integration for post-quantum JWT authentication. This is the application-layer wiring — extension methods, an AuthenticationHandler, event hooks, a JWKS-equivalent key ring, hosted-service warmup, metrics, and tracing — NOT a cryptography library. The actual ML-DSA-65 / X-Wing / AES-GCM work happens in PostQuantum.Jwt and the .NET 10 BCL primitives. We don't compete with BouncyCastle or liboqs; we sit on top of them. Adds AddPostQuantumJwtBearer() so hybrid ML-DSA-65 + X-Wing tokens slot into the standard ASP.NET Core authentication pipeline exactly the way AddJwtBearer always has. Fail-closed by construction, AOT-compatible, with metrics and tracing emitted via System.Diagnostics. Preview release — not for production use.</Description>

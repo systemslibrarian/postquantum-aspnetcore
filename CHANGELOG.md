@@ -10,6 +10,50 @@ versions.
 
 _No changes yet._
 
+## [0.8.0-preview.1] — 2026-05-31
+
+A **documentation-and-examples** release. The library code is mature
+enough that the next biggest improvement isn't more code — it's
+making sure a downloader can go from "I just saw this on nuget.org"
+to "in production" without writing a single line of glue.
+
+### Added
+
+- **`docs/GETTING-STARTED.md`** — the canonical "first 10 minutes"
+  walkthrough. Prereqs check, `dotnet new webapi`, install,
+  scaffold a working PQ-protected API, exercise it with `curl`.
+- **`docs/RECIPES.md`** — 13 copy-paste-able scenarios covering the
+  questions consumers actually ask: token minting, static-key
+  validation, JWKS-equivalent key rotation, hosted-service warmup,
+  Redis replay protection, role + policy authorization,
+  multi-scheme coexistence with `AddJwtBearer`, OpenTelemetry
+  (metrics + traces), SignalR `?access_token=`, multi-tenant
+  validation, health checks, Swagger/OpenAPI integration,
+  Docker/Kubernetes notes.
+- **`docs/FAQ.md`** — 17 pre-loaded answers covering "should I use
+  this in production?", "how big are tokens really?", "does this
+  work with Auth0/IdentityServer?", "why net10.0 only?", and the
+  rest.
+- **`samples/PostQuantum.AspNetCore.Mvc.Demo`** — controller-based
+  ASP.NET Core MVC sample with `[Authorize]`,
+  `[Authorize(Roles = "admin")]`, and
+  `[Authorize(Policy = "AcmeTenant")]` against PQ tokens. In-page
+  browser harness mints tokens and exercises each endpoint.
+
+### Changed
+
+- **README opens with an "in a hurry?" callout** linking the new
+  getting-started, recipes, FAQ, production checklist, and migration
+  docs. The very first thing a downloader sees points them at the
+  right doc for their context.
+- **README adds inline sections** for the three things consumers ask
+  about first: Redis replay protection (companion package wireup),
+  OpenTelemetry metrics + traces (one-liner subscription), issuing
+  tokens (server-side `PqJwtBuilder` snippet).
+- **`docs/README.md` index** restructured into Start-Here /
+  Migrating / Operations / ADRs / Audits sections so the doc landing
+  page is itself a useful map.
+
 ## [0.7.0-preview.1] — 2026-05-31
 
 A **companion + depth** release. v0.6 was 56-tests-green; v0.7 adds the
@@ -456,7 +500,10 @@ release cadence.
 
 ---
 
-[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.5.0-preview.1...HEAD
+[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.8.0-preview.1...HEAD
+[0.8.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.7.0-preview.1...v0.8.0-preview.1
+[0.7.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.6.0-preview.1...v0.7.0-preview.1
+[0.6.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.5.0-preview.1...v0.6.0-preview.1
 [0.5.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.4.0-preview.1...v0.5.0-preview.1
 [0.4.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.3.0-preview.1...v0.4.0-preview.1
 [0.3.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.2.0-preview.1...v0.3.0-preview.1

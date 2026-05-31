@@ -3,6 +3,7 @@
   <Project Path="src/PostQuantum.AspNetCore.RedisReplayCache/PostQuantum.AspNetCore.RedisReplayCache.csproj" />
   <Project Path="samples/PostQuantum.AspNetCore.Demo/PostQuantum.AspNetCore.Demo.csproj" />
   <Project Path="samples/PostQuantum.AspNetCore.SignalR.Demo/PostQuantum.AspNetCore.SignalR.Demo.csproj" />
+  <Project Path="samples/PostQuantum.AspNetCore.Mvc.Demo/PostQuantum.AspNetCore.Mvc.Demo.csproj" />
   <Project Path="tests/PostQuantum.AspNetCore.Tests/PostQuantum.AspNetCore.Tests.csproj" />
   <Project Path="tests/PostQuantum.AspNetCore.AotSmokeTest/PostQuantum.AspNetCore.AotSmokeTest.csproj" />
   <Project Path="tests/PostQuantum.AspNetCore.Fuzz/PostQuantum.AspNetCore.Fuzz.csproj" />

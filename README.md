@@ -32,10 +32,18 @@ small surface, honest about its limits.
 > **equivalent** that knows the right things about ML-DSA-65 — not a
 > reinvention of the crypto stack underneath.
 
-> **Status — `0.7.0-preview.1`.** Preview software. Not for production use.
+> **Status — `0.8.0-preview.1`.** Preview software. Not for production use.
 > The API may change before 1.0, and the underlying cryptographic construction
 > has not been independently audited. Read [`KNOWN-GAPS.md`](KNOWN-GAPS.md)
 > before depending on this for anything that matters.
+
+> **In a hurry?** Jump straight to:
+>
+> - **[Getting started](docs/GETTING-STARTED.md)** — zero to working PQ API in 10 minutes.
+> - **[Recipes](docs/RECIPES.md)** — copy-paste-able scenarios: Redis replay, OpenTelemetry, SignalR, multi-tenant, multi-scheme, Swagger, Docker/K8s.
+> - **[FAQ](docs/FAQ.md)** — should I use this in production? how big are tokens? does it work with Auth0? — and 15 more.
+> - **[Production checklist](docs/PRODUCTION-CHECKLIST.md)** — before user traffic hits.
+> - **[Migration guide](docs/MIGRATION.md)** — from `PostQuantum.Jwt.AspNetCore`.
 
 ---
 
@@ -75,8 +83,12 @@ looking for raw ML-DSA, ML-KEM, X25519, or AES-GCM, those live in the
 - [Usage](#usage)
   - [Sign and validate](#sign-and-validate)
   - [Events: enrich, observe, customize the challenge](#events-enrich-observe-customize-the-challenge)
+  - [Distributed replay protection with Redis](#distributed-replay-protection-with-redis)
+  - [OpenTelemetry: metrics and distributed tracing](#opentelemetry-metrics-and-distributed-tracing)
+  - [Issuing tokens (server-side)](#issuing-tokens-server-side)
   - [Key rotation across services](#key-rotation-across-services)
   - [Custom scheme name](#custom-scheme-name)
+- [Sample apps](#sample-apps)
 - [Public API at a glance](#public-api-at-a-glance)
 - [Defaults and what they mean](#defaults-and-what-they-mean)
 - [Compared to `Microsoft.AspNetCore.Authentication.JwtBearer`](#compared-to-microsoftaspnetcoreauthenticationjwtbearer)
@@ -129,13 +141,13 @@ nothing else.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.AspNetCore --version 0.7.0-preview.1
+dotnet add package PostQuantum.AspNetCore --version 0.8.0-preview.1
 ```
 
 Or in a `.csproj`:
 
 ```xml
-<PackageReference Include="PostQuantum.AspNetCore" Version="0.7.0-preview.1" />
+<PackageReference Include="PostQuantum.AspNetCore" Version="0.8.0-preview.1" />
 ```
 
 **Runtime requirement:** the native ML-KEM / ML-DSA primitives need an
@@ -208,6 +220,18 @@ plus an in-page browser client so the whole loop runs in one process:
 ```bash
 dotnet run --project samples/PostQuantum.AspNetCore.SignalR.Demo
 # browse to http://localhost:5050/
+```
+
+A third sample — [`samples/PostQuantum.AspNetCore.Mvc.Demo`](samples/PostQuantum.AspNetCore.Mvc.Demo)
+— shows the classic controller-based ASP.NET Core MVC pattern:
+`[Authorize]`, `[Authorize(Roles = "admin")]`, and
+`[Authorize(Policy = "AcmeTenant")]` against PQ tokens, with an
+in-page browser harness that mints and exercises tokens against
+each endpoint:
+
+```bash
+dotnet run --project samples/PostQuantum.AspNetCore.Mvc.Demo
+# browse to http://localhost:5100/
 ```
 
 ---
@@ -298,6 +322,84 @@ four async hooks for the moments that matter:
 
 Hook delegates default to no-ops, so leaving `Events` alone gives you
 the same behaviour as not having the hooks at all.
+
+### Distributed replay protection with Redis
+
+`jti`-based single-use enforcement across every instance in your
+fleet. Install the companion package:
+
+```bash
+dotnet add package PostQuantum.AspNetCore.RedisReplayCache --version 0.8.0-preview.1
+```
+
+```csharp
+using PostQuantum.AspNetCore.RedisReplayCache;
+
+builder.Services
+    .AddAuthentication(PostQuantumJwtBearerDefaults.AuthenticationScheme)
+    .AddPostQuantumJwtBearer(options => { /* ... validation parameters ... */ });
+
+builder.Services.AddPostQuantumJwtRedisReplayCache(
+    connectionString: builder.Configuration["Redis:ConnectionString"]!);
+```
+
+Under the hood: `SET key 1 NX PX {remaining-token-lifetime}`. First
+use wins, replays return false → validator throws → handler returns
+401. The TTL means the cache cleans itself up after token expiration.
+
+The bundled in-process `InMemoryReplayCache` is for single-process
+deployments only; for anything else, use Redis (or implement your
+own `IPqJwtReplayCache` against your store).
+
+### OpenTelemetry: metrics and distributed tracing
+
+The library emits Metrics + ActivitySource under the
+`"PostQuantum.AspNetCore"` instrumentation name. One-liner wireup:
+
+```csharp
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(m => m.AddMeter("PostQuantum.AspNetCore")
+                       .AddPrometheusExporter())
+    .WithTracing(t => t.AddSource("PostQuantum.AspNetCore")
+                       .AddAspNetCoreInstrumentation()
+                       .AddOtlpExporter());
+```
+
+You get auth-success/failure counters, validation-latency
+histograms, key-ring lookup tags, and a per-validation tracing
+span — everything you need to build a "post-quantum auth health"
+dashboard.
+
+[Full signal contract](docs/RECIPES.md#8-opentelemetry-metrics-and-distributed-tracing)
+in the recipes.
+
+### Issuing tokens (server-side)
+
+Token minting lives in the engine library (`PostQuantum.Jwt`),
+because the issuer doesn't need ASP.NET Core to mint:
+
+```csharp
+using PostQuantum.Jwt;
+
+// signingKey is the private half — load from your secret store.
+string token = new PqJwtBuilder()
+    .WithIssuer("https://issuer.example")
+    .WithAudience("https://api.example")
+    .WithSubject("user-42")
+    .WithJwtId(Guid.NewGuid().ToString("N"))      // for replay protection
+    .WithLifetime(TimeSpan.FromMinutes(15))
+    .WithClaim("role", "admin")
+    .WithKeyId("signing-key-2026-q2")              // for kid rotation
+    .SignWith(signingKey)
+    .Build();
+```
+
+Publish the **verification** half (public key) via your
+JWKS-equivalent endpoint so resource servers can validate without
+sharing secrets.
 
 ### Key rotation across services
 

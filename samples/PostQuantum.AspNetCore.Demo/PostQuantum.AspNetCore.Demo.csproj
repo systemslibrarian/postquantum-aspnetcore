@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PostQuantum.AspNetCore.Demo</RootNamespace>
+    <AssemblyName>PostQuantum.AspNetCore.Demo</AssemblyName>
+    <UserSecretsId>postquantum-aspnetcore-demo</UserSecretsId>
+    <!-- Sample app — not packaged, no XML docs required. -->
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- CA1014: a sample-app assembly doesn't need a CLSCompliant attribute. -->
+    <NoWarn>$(NoWarn);CA1014</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/PostQuantum.AspNetCore/PostQuantum.AspNetCore.csproj" />
+  </ItemGroup>
+
+</Project>

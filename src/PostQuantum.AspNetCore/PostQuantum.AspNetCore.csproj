@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      net10.0 only. The underlying PostQuantum.Jwt engine relies on the BCL
+      System.Security.Cryptography.MLDsa / MLKem types introduced in .NET 10,
+      so multi-targeting older TFMs would be dishonest until the engine
+      grows a polyfill path. Tracked in KNOWN-GAPS.md.
+    -->
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PostQuantum.AspNetCore</RootNamespace>
+    <AssemblyName>PostQuantum.AspNetCore</AssemblyName>
+    <IsTrimmable>true</IsTrimmable>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>PostQuantum.AspNetCore</PackageId>
+    <Version>0.1.0-preview.1</Version>
+    <Title>PostQuantum.AspNetCore — quantum-resistant JWT bearer auth for ASP.NET Core</Title>
+    <Authors>Paul Clark</Authors>
+    <Description>The definitive ASP.NET Core integration for post-quantum JWT authentication. Adds AddPostQuantumJwtBearer() so hybrid ML-DSA-65 + X-Wing (X25519 / ML-KEM-768) tokens slot into the standard authentication pipeline. Built on the native .NET 10 BCL post-quantum primitives via PostQuantum.Jwt. Fail-closed by construction, small surface, honest about its limits. Preview release — not for production use.</Description>
+    <PackageProjectUrl>https://github.com/systemslibrarian/postquantum-aspnetcore</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/systemslibrarian/postquantum-aspnetcore</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>jwt;jose;jwe;post-quantum;pqc;ml-dsa;ml-kem;x-wing;hybrid;aspnetcore;authentication;jwtbearer;net10</PackageTags>
+    <PackageReleaseNotes>0.1.0-preview.1: Initial preview. AddPostQuantumJwtBearer(...) authentication handler for ASP.NET Core, plus an HTTP-fetched key ring (the post-quantum analogue of JWKS) for kid-based rotation across services. Fail-closed by construction. See KNOWN-GAPS.md before depending on this for anything that matters.</PackageReleaseNotes>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <Copyright>Copyright © Paul Clark</Copyright>
+    <NeutralLanguage>en-US</NeutralLanguage>
+  </PropertyGroup>
+
+  <!-- Symbols + SourceLink for debuggable, reproducible packages.
+       EnablePackageValidation catches accidental API breaks on subsequent versions. -->
+  <PropertyGroup>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <EnablePackageValidation>true</EnablePackageValidation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PostQuantum.Jwt" Version="0.3.0-preview.1" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="\" />
+    <None Include="../../CHANGELOG.md" Pack="true" PackagePath="\" Condition="Exists('../../CHANGELOG.md')" />
+  </ItemGroup>
+
+</Project>

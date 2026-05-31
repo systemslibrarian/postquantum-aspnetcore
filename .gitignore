@@ -1,0 +1,30 @@
+# Build output
+bin/
+obj/
+artifacts/
+*.user
+*.suo
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+nuget.key.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test results
+TestResults/
+coverage.*
+*.coverage
+*.coveragexml

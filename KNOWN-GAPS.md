@@ -5,7 +5,7 @@ do, what is unverified, and where the sharp edges are. Honesty over polish:
 if something is incomplete, it is listed here rather than glossed over. This
 file is part of the contract with anyone evaluating the package.
 
-Last reviewed for: `0.2.0-preview.1`.
+Last reviewed for: `0.3.0-preview.1`.
 
 ## Inherited from `PostQuantum.Jwt`
 
@@ -89,10 +89,7 @@ for the full list.
   baseline comparison against `0.1.0-preview.1` is gated behind
   `-p:EnableBaselineValidation=true` until that version lands on
   nuget.org and the baseline package is resolvable.
-- **No version-sync script yet.** The engine repo has
-  `scripts/check-version-sync.sh` to keep the `.csproj`, README, and
-  CHANGELOG aligned. This repo doesn't (yet) — version drift would currently
-  be caught only by the release workflow's tag-vs-csproj check.
+<!-- version-sync script landed in 0.3 — runs on every CI push. -->
 
 ---
 

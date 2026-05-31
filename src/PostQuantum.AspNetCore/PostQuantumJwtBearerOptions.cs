@@ -65,6 +65,52 @@ public sealed class PostQuantumJwtBearerOptions : AuthenticationSchemeOptions
     /// </summary>
     public new PostQuantumJwtBearerEvents Events { get; set; } = new();
 
+    /// <summary>
+    /// An optional <see cref="IPostQuantumJwtKeyRing"/> wired into validation.
+    /// When set <em>and</em> <see cref="PqJwtValidationParameters.SignatureKeyResolver"/>
+    /// is <see langword="null"/>, the handler resolves verification keys
+    /// by <c>kid</c> through this ring. An explicit
+    /// <see cref="PqJwtValidationParameters.SignatureKeyResolver"/> always
+    /// wins — this is the fallback wiring, not an override.
+    /// </summary>
+    /// <remarks>
+    /// Prefer <c>services.AddPostQuantumJwtKeyRing(uri)</c> from
+    /// <see cref="PostQuantumJwtKeyRingExtensions"/> over setting this
+    /// property directly: the helper handles DI registration of the
+    /// underlying <see cref="HttpClient"/> and post-configures the
+    /// options without forcing you to build a parallel service provider.
+    /// </remarks>
+    public IPostQuantumJwtKeyRing? KeyRing { get; set; }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Called by the framework before the handler initializes. We refuse a
+    /// configuration that supplies neither a verification key nor a key
+    /// resolver — a validator with no way to obtain a public key is
+    /// misconfigured by definition, and surfacing that at startup is far
+    /// kinder than surfacing it on the first request.
+    /// </remarks>
+    public override void Validate()
+    {
+        base.Validate();
+
+        if (ValidationParameters is null)
+        {
+            throw new InvalidOperationException(
+                "PostQuantumJwtBearerOptions.ValidationParameters is required.");
+        }
+
+        if (ValidationParameters.SignatureVerificationKey is null &&
+            ValidationParameters.SignatureKeyResolver is null &&
+            KeyRing is null)
+        {
+            throw new InvalidOperationException(
+                "PostQuantumJwtBearerOptions must supply at least one source of verification keys: " +
+                "ValidationParameters.SignatureVerificationKey, ValidationParameters.SignatureKeyResolver, " +
+                "or KeyRing. A validator with no source of verification keys cannot authenticate any token.");
+        }
+    }
+
     // Clock comes from the inherited AuthenticationSchemeOptions.TimeProvider —
     // set it on Options if you need a deterministic clock for tests or
     // simulated time in production.

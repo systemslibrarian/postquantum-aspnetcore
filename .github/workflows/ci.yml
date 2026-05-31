@@ -10,6 +10,30 @@ permissions:
   contents: read
 
 jobs:
+  version-sync:
+    # Fail fast if the package version drifts across csproj, README, and
+    # CHANGELOG. A crypto-adjacent package shipping inconsistent version
+    # strings is a trust signal we never want to send.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check version is in sync across csproj/README/CHANGELOG
+        run: bash scripts/check-version-sync.sh
+
+  format:
+    # `dotnet format` is authoritative — fail the build on any drift.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore
+      - name: Verify formatting
+        run: dotnet format --verify-no-changes --no-restore
+
   build-test:
     strategy:
       fail-fast: false

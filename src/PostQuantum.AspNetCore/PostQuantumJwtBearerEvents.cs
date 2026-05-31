@@ -17,6 +17,17 @@ namespace PostQuantum.AspNetCore;
 public class PostQuantumJwtBearerEvents
 {
     /// <summary>
+    /// Invoked at the very start of authentication, before the handler reads
+    /// the <c>Authorization</c> header. Set
+    /// <see cref="PostQuantumJwtBearerMessageReceivedContext.Token"/> to
+    /// substitute a token from somewhere else — a SignalR
+    /// <c>?access_token=</c> query string, a signed cookie, a custom
+    /// header. Leave it unset to use the default header-based lookup.
+    /// </summary>
+    public Func<PostQuantumJwtBearerMessageReceivedContext, Task> OnMessageReceived { get; set; }
+        = static _ => Task.CompletedTask;
+
+    /// <summary>
     /// Invoked after a token has been successfully validated. Use this to
     /// enrich the <see cref="System.Security.Claims.ClaimsPrincipal"/> (for
     /// example, load roles from a database) or replace the constructed

@@ -28,6 +28,20 @@ public sealed class PostQuantumJwtBearerHandlerTests
     }
 
     [PqcFact]
+    public async Task ValidToken_WithLowercaseBearer_ReturnsTwoHundred()
+    {
+        using var factory = new TestServerFactory();
+        using var client = factory.CreateClient();
+        var token = factory.MintToken();
+
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/me");
+        req.Headers.TryAddWithoutValidation("Authorization", "bearer " + token);
+        using var resp = await client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+    }
+
+    [PqcFact]
     public async Task MissingAuthorizationHeader_ReturnsFourOhOneChallenge()
     {
         using var factory = new TestServerFactory();
@@ -37,8 +51,10 @@ public sealed class PostQuantumJwtBearerHandlerTests
 
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
         Assert.NotNull(resp.Headers.WwwAuthenticate);
-        Assert.Contains(resp.Headers.WwwAuthenticate, h =>
-            string.Equals(h.Scheme, "Bearer", StringComparison.Ordinal));
+        var bearer = resp.Headers.WwwAuthenticate.FirstOrDefault(h =>
+            string.Equals(h.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(bearer);
+        Assert.DoesNotContain("error=", bearer!.Parameter, StringComparison.Ordinal);
     }
 
     [PqcFact]
@@ -129,22 +145,24 @@ public sealed class PostQuantumJwtBearerHandlerTests
     }
 
     [PqcFact]
-    public async Task ChallengeIncludesErrorDetailsByDefault()
+    public async Task ChallengeIncludesErrorDetailsByDefault_WhenTokenSupplied_AndValidationFails()
     {
         using var factory = new TestServerFactory();
         using var client = factory.CreateClient();
 
-        using var resp = await client.GetAsync("/me");
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/me");
+        req.Headers.Authorization = new("Bearer", "invalid.token.here");
+        using var resp = await client.SendAsync(req);
 
         Assert.NotNull(resp.Headers.WwwAuthenticate);
         var bearer = resp.Headers.WwwAuthenticate.FirstOrDefault(h =>
-            string.Equals(h.Scheme, "Bearer", StringComparison.Ordinal));
+            string.Equals(h.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase));
         Assert.NotNull(bearer);
         Assert.Contains("error=\"invalid_token\"", bearer!.Parameter, StringComparison.Ordinal);
     }
 
     [PqcFact]
-    public async Task ChallengeOmitsErrorDetails_WhenOptedOut()
+    public async Task ChallengeOmitsErrorDetails_WhenOptedOut_EvenIfValidationFails()
     {
         using var factory = new TestServerFactory
         {
@@ -152,10 +170,12 @@ public sealed class PostQuantumJwtBearerHandlerTests
         };
         using var client = factory.CreateClient();
 
-        using var resp = await client.GetAsync("/me");
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/me");
+        req.Headers.Authorization = new("Bearer", "invalid.token.here");
+        using var resp = await client.SendAsync(req);
 
         var bearer = resp.Headers.WwwAuthenticate.FirstOrDefault(h =>
-            string.Equals(h.Scheme, "Bearer", StringComparison.Ordinal));
+            string.Equals(h.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase));
         Assert.NotNull(bearer);
         Assert.DoesNotContain("error=", bearer!.Parameter, StringComparison.Ordinal);
     }

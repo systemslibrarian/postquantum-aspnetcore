@@ -38,6 +38,35 @@ public abstract class PostQuantumJwtBearerContext
 }
 
 /// <summary>
+/// Context passed to <see cref="PostQuantumJwtBearerEvents.OnMessageReceived"/>.
+/// Set <see cref="Token"/> to supply a token from a non-standard carrier
+/// (SignalR <c>?access_token=</c>, signed cookie, custom header, etc.).
+/// </summary>
+public sealed class PostQuantumJwtBearerMessageReceivedContext : PostQuantumJwtBearerContext
+{
+    /// <summary>Creates the context.</summary>
+    /// <param name="httpContext">The current HTTP context.</param>
+    /// <param name="scheme">The authentication scheme.</param>
+    /// <param name="options">The handler's options.</param>
+    public PostQuantumJwtBearerMessageReceivedContext(
+        HttpContext httpContext,
+        AuthenticationScheme scheme,
+        PostQuantumJwtBearerOptions options)
+        : base(httpContext, scheme, options)
+    {
+    }
+
+    /// <summary>
+    /// The token to validate. Leave <see langword="null"/> to fall back to
+    /// the standard <c>Authorization: Bearer …</c> header lookup. Setting
+    /// this to an empty string is treated the same as leaving it null;
+    /// setting it to a non-empty value short-circuits the header lookup
+    /// entirely.
+    /// </summary>
+    public string? Token { get; set; }
+}
+
+/// <summary>
 /// Context passed to <see cref="PostQuantumJwtBearerEvents.OnTokenValidated"/>.
 /// The principal is exposed mutably so handlers can enrich it; replacing
 /// <see cref="Principal"/> outright replaces the identity for the request.

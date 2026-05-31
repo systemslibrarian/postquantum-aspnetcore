@@ -27,7 +27,14 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
     private readonly TimeSpan _refreshInterval;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<HttpPostQuantumJwtKeyRing>? _logger;
-    private readonly ConcurrentDictionary<string, MLDsa> _cache = new(StringComparer.Ordinal);
+    // Volatile read/write for atomic swap on refresh — readers see either the
+    // old snapshot or the new one, never a torn intermediate. Declared as the
+    // interface so the analyzer's CA1859 "use the concrete type" suggestion
+    // wouldn't apply; CA1859 fires anyway because it can't see the volatile
+    // intent — suppress with a directed comment.
+#pragma warning disable CA1859 // immutable snapshot semantics, not perf
+    private volatile IReadOnlyDictionary<string, MLDsa> _cache = new Dictionary<string, MLDsa>(StringComparer.Ordinal);
+#pragma warning restore CA1859
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private DateTimeOffset _lastFetched = DateTimeOffset.MinValue;
     private bool _disposed;
@@ -120,7 +127,13 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
         await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (!force && _timeProvider.GetUtcNow() - _lastFetched < _refreshInterval)
+            var nowInsideLock = _timeProvider.GetUtcNow();
+            if (force && nowInsideLock - _lastFetched < TimeSpan.FromSeconds(10))
+            {
+                // Throttling: prevent amplification attacks from unknown kid flooding
+                return;
+            }
+            else if (!force && nowInsideLock - _lastFetched < _refreshInterval)
             {
                 return;
             }
@@ -139,6 +152,7 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
                 return;
             }
 
+            var newCache = new Dictionary<string, MLDsa>(StringComparer.Ordinal);
             foreach (var entry in directory.Keys)
             {
                 if (string.IsNullOrEmpty(entry.Kid) || string.IsNullOrEmpty(entry.Key))
@@ -156,11 +170,13 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
                 {
                     var bytes = Convert.FromBase64String(entry.Key);
                     var key = MLDsa.ImportMLDsaPublicKey(MLDsaAlgorithm.MLDsa65, bytes);
-                    _cache.AddOrUpdate(entry.Kid, key, (_, old) =>
-                    {
-                        old.Dispose();
-                        return key;
-                    });
+                    // Deliberately NOT disposing previous entries:
+                    // an in-flight validation may still hold a reference to it
+                    // via SignatureKeyResolver, and disposing under it would
+                    // throw ObjectDisposedException mid-request. The native
+                    // handle gets released by MLDsa's finalizer once the GC
+                    // sees no live references.
+                    newCache[entry.Kid] = key;
                 }
                 catch (Exception ex) when (ex is FormatException or CryptographicException)
                 {
@@ -168,13 +184,20 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
                 }
             }
 
+            _cache = newCache;
             _lastFetched = _timeProvider.GetUtcNow();
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Network / parse failures are logged and swallowed — Resolve() will
-            // return null for an unknown kid, which surfaces upstream as a
-            // fail-closed signature-resolver miss.
+            // Caller-initiated cancellation must propagate — never log-and-swallow.
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or TaskCanceledException)
+        {
+            // Network / parse failures (including server-side timeouts surfacing
+            // as TaskCanceledException with no caller cancellation) are logged
+            // and swallowed — Resolve() will return null for an unknown kid,
+            // which surfaces upstream as a fail-closed signature-resolver miss.
             _logger?.KeyRingFetchFailed(ex, _endpoint);
         }
         finally
@@ -191,11 +214,10 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
             return;
         }
 
-        foreach (var key in _cache.Values)
-        {
-            key.Dispose();
-        }
-
+        // Note: cached MLDsa instances are NOT disposed here — once handed out
+        // via Resolve(), they may still be in flight inside a validator. They
+        // will be released by the finalizer when the GC sees no live
+        // references. Dispose only owns the refresh lock.
         _refreshLock.Dispose();
         _disposed = true;
     }

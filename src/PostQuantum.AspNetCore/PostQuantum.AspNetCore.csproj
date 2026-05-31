@@ -17,7 +17,7 @@
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <PackageId>PostQuantum.AspNetCore</PackageId>
-    <Version>0.2.0-preview.1</Version>
+    <Version>0.3.0-preview.1</Version>
     <Title>PostQuantum.AspNetCore — quantum-resistant JWT bearer auth for ASP.NET Core</Title>
     <Authors>Paul Clark</Authors>
     <Description>The definitive ASP.NET Core integration for post-quantum JWT authentication. Adds AddPostQuantumJwtBearer() so hybrid ML-DSA-65 + X-Wing (X25519 / ML-KEM-768) tokens slot into the standard authentication pipeline. Built on the native .NET 10 BCL post-quantum primitives via PostQuantum.Jwt. Fail-closed by construction, small surface, honest about its limits. Includes an event-hook surface (OnTokenValidated / OnAuthenticationFailed / OnChallenge), an HTTP-fetched key ring with async resolution, end-to-end integration tests, and a CycloneDX SBOM packed inside the .nupkg. Preview release — not for production use.</Description>
@@ -27,7 +27,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>jwt;jose;jwe;post-quantum;pqc;ml-dsa;ml-kem;x-wing;hybrid;aspnetcore;authentication;jwtbearer;net10</PackageTags>
-    <PackageReleaseNotes>0.2.0-preview.1: Substance-and-confidence release. New PostQuantumJwtBearerEvents surface (OnTokenValidated / OnAuthenticationFailed / OnChallenge). IPostQuantumJwtKeyRing.ResolveAsync hook; HttpPostQuantumJwtKeyRing overrides it natively async. Microsoft.AspNetCore.Mvc.Testing-backed integration suite (18 tests, zero skips on PQ-capable hosts). GitHub Actions ci.yml + release.yml with a nuget-publish environment gate, SHA256SUMS, build-provenance attestations, and optional author signing. CycloneDX SBOM packed inside the .nupkg. PackageValidationBaselineVersion wired (opt-in). Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md — known limitations: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/KNOWN-GAPS.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.3.0-preview.1: A 10/10 audit pass. Real correctness bugs fixed: HttpPostQuantumJwtKeyRing no longer disposes MLDsa instances under in-flight validations (atomic snapshot swap on refresh; deferred to GC); caller cancellation propagates from ResolveAsync; WWW-Authenticate realm is now RFC 7235-compliant quoted-string escaped; Bearer prefix match is case-insensitive (RFC 6750). New surface: OnMessageReceived event (SignalR-style alternate token transports); PostQuantumJwtBearerOptions.KeyRing + the AddPostQuantumJwtKeyRing(...) DI helper that replaces the README's old BuildServiceProvider anti-pattern; Options.Validate() override that fails startup on a missing key source. Tests: 31, zero skips. Docs: ADR for the single-suite decision, production checklist, diagnostics guide, CONTRIBUTING + code of conduct + issue/PR templates. CI: version-sync script, dotnet format verify-no-changes job. Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md.</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Copyright>Copyright © Paul Clark</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>

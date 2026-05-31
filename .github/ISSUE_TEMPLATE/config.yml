@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/systemslibrarian/postquantum-aspnetcore/security/advisories/new
+    about: Please use private disclosure — do NOT open a public issue for security bugs.
+  - name: Questions about post-quantum JWT itself (not the ASP.NET Core wrapper)
+    url: https://github.com/systemslibrarian/postquantum-jwt/issues
+    about: Bugs in the underlying signature / KEM construction belong on the engine repo.

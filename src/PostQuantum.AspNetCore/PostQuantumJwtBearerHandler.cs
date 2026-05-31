@@ -46,7 +46,9 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
             var current = Options.ValidationParameters;
             if (_validator is null || !ReferenceEquals(_cachedParameters, current))
             {
-                _validator = new PqJwtValidator(current, Options.TimeProvider);
+                _validator = new PqJwtValidator(
+                    ComposeValidationParameters(current, Options.KeyRing),
+                    Options.TimeProvider);
                 _cachedParameters = current;
             }
 
@@ -54,22 +56,66 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
         }
     }
 
+    // If a KeyRing is registered and the user hasn't already wired a
+    // SignatureKeyResolver, weave the ring's Resolve method in. We do this by
+    // cloning the parameters via `with`-style reconstruction since
+    // PqJwtValidationParameters is init-only. An explicit user-supplied
+    // resolver always wins.
+    private static PqJwtValidationParameters ComposeValidationParameters(
+        PqJwtValidationParameters source,
+        IPostQuantumJwtKeyRing? keyRing)
+    {
+        if (keyRing is null || source.SignatureKeyResolver is not null)
+        {
+            return source;
+        }
+
+        return new PqJwtValidationParameters
+        {
+            SignatureVerificationKey = source.SignatureVerificationKey,
+            SignatureKeyResolver = keyRing.Resolve,
+            ReplayCache = source.ReplayCache,
+            DecryptionKey = source.DecryptionKey,
+            ValidIssuer = source.ValidIssuer,
+            ValidAudience = source.ValidAudience,
+            ValidateLifetime = source.ValidateLifetime,
+            RequireExpiration = source.RequireExpiration,
+            ClockSkew = source.ClockSkew,
+        };
+    }
+
     /// <inheritdoc />
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        // No header / wrong scheme → "no result" rather than "fail": lets
-        // other schemes registered on the same request get a shot at it.
-        var authorization = Request.Headers.Authorization.ToString();
-        if (string.IsNullOrEmpty(authorization) ||
-            !authorization.StartsWith(PostQuantumJwtBearerDefaults.BearerPrefix, StringComparison.Ordinal))
-        {
-            return AuthenticateResult.NoResult();
-        }
+        // First chance: let an OnMessageReceived handler supply a token from
+        // a non-standard carrier (SignalR ?access_token=, signed cookie,
+        // custom header). If it sets Token, we honour it and skip the
+        // Authorization header lookup entirely.
+        var messageReceived = new PostQuantumJwtBearerMessageReceivedContext(
+            Context, Scheme, Options);
+        await Options.Events.OnMessageReceived(messageReceived).ConfigureAwait(false);
 
-        var token = authorization[PostQuantumJwtBearerDefaults.BearerPrefix.Length..];
-        if (string.IsNullOrWhiteSpace(token))
+        string token;
+        if (!string.IsNullOrEmpty(messageReceived.Token))
         {
-            return AuthenticateResult.NoResult();
+            token = messageReceived.Token;
+        }
+        else
+        {
+            // No header / wrong scheme → "no result" rather than "fail": lets
+            // other schemes registered on the same request get a shot at it.
+            var authorization = Request.Headers.Authorization.ToString();
+            if (string.IsNullOrEmpty(authorization) ||
+                !authorization.StartsWith(PostQuantumJwtBearerDefaults.BearerPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return AuthenticateResult.NoResult();
+            }
+
+            token = authorization[PostQuantumJwtBearerDefaults.BearerPrefix.Length..];
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return AuthenticateResult.NoResult();
+            }
         }
 
         PqJwtValidationResult result;
@@ -102,7 +148,21 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
 
         var validated = new PostQuantumJwtBearerTokenValidatedContext(
             Context, Scheme, Options, principal, result, token);
-        await Options.Events.OnTokenValidated(validated).ConfigureAwait(false);
+
+        try
+        {
+            await Options.Events.OnTokenValidated(validated).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.ValidationFailed(ex);
+
+            var failed = new PostQuantumJwtBearerAuthenticationFailedContext(
+                Context, Scheme, Options, ex);
+            await Options.Events.OnAuthenticationFailed(failed).ConfigureAwait(false);
+
+            return failed.Result ?? AuthenticateResult.Fail(ex);
+        }
 
         var ticket = new AuthenticationTicket(validated.Principal, Scheme.Name);
         return AuthenticateResult.Success(ticket);
@@ -121,13 +181,43 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
             return;
         }
 
-        var realm = Options.Realm ?? Scheme.Name;
-        var header = Options.IncludeErrorDetailsInChallenge
+        var realm = EscapeForQuotedString(Options.Realm ?? Scheme.Name);
+
+        var authResult = await Context.AuthenticateAsync(Scheme.Name).ConfigureAwait(false);
+        var hasAuthenticationError = authResult?.Failure != null;
+
+        var header = Options.IncludeErrorDetailsInChallenge && hasAuthenticationError
             ? $"Bearer realm=\"{realm}\", error=\"invalid_token\""
             : $"Bearer realm=\"{realm}\"";
 
         Response.Headers.WWWAuthenticate = header;
         Response.StatusCode = StatusCodes.Status401Unauthorized;
+    }
+
+    // RFC 7235 §2.2: realm is a quoted-string; the only characters that must be
+    // escaped inside it are \ and ". Anything else passes through verbatim. We
+    // do NOT strip control characters here — operators who put control bytes
+    // in a realm value have bigger problems than header formatting — but we
+    // do guarantee the header parses.
+    private static string EscapeForQuotedString(string value)
+    {
+        if (!value.AsSpan().ContainsAny('\\', '"'))
+        {
+            return value;
+        }
+
+        var sb = new System.Text.StringBuilder(value.Length + 4);
+        foreach (var ch in value)
+        {
+            if (ch is '\\' or '"')
+            {
+                sb.Append('\\');
+            }
+
+            sb.Append(ch);
+        }
+
+        return sb.ToString();
     }
 
     private static void AppendClaim(ClaimsIdentity identity, string name, JsonElement element)

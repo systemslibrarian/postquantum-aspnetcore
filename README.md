@@ -13,7 +13,7 @@ exactly the way `AddJwtBearer` always has. Built on
 the native .NET 10 BCL post-quantum primitives. Fail-closed by construction,
 small surface, honest about its limits.
 
-> **Status — `0.1.0-preview.1`.** Preview software. Not for production use.
+> **Status — `0.3.0-preview.1`.** Preview software. Not for production use.
 > The API may change before 1.0, and the underlying cryptographic construction
 > has not been independently audited. Read [`KNOWN-GAPS.md`](KNOWN-GAPS.md)
 > before depending on this for anything that matters.
@@ -70,13 +70,13 @@ nothing else.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.AspNetCore --version 0.1.0-preview.1
+dotnet add package PostQuantum.AspNetCore --version 0.3.0-preview.1
 ```
 
 Or in a `.csproj`:
 
 ```xml
-<PackageReference Include="PostQuantum.AspNetCore" Version="0.1.0-preview.1" />
+<PackageReference Include="PostQuantum.AspNetCore" Version="0.3.0-preview.1" />
 ```
 
 **Runtime requirement:** the native ML-KEM / ML-DSA primitives need an
@@ -173,12 +173,28 @@ duplicated here. This package is the *receiving* half.
 ### Events: enrich, observe, customize the challenge
 
 `PostQuantumJwtBearerEvents` mirrors the shape of `JwtBearerEvents` —
-three async hooks for the moments that matter:
+four async hooks for the moments that matter:
 
 ```csharp
 .AddPostQuantumJwtBearer(options =>
 {
     options.ValidationParameters = new PqJwtValidationParameters { /* ... */ };
+
+    // Substitute a token from a non-Authorization-header source.
+    // SignalR's ?access_token= is the canonical use case.
+    options.Events.OnMessageReceived = ctx =>
+    {
+        if (ctx.HttpContext.Request.Path.StartsWithSegments("/hub"))
+        {
+            var query = ctx.HttpContext.Request.Query["access_token"].ToString();
+            if (!string.IsNullOrEmpty(query))
+            {
+                ctx.Token = query;
+            }
+        }
+
+        return Task.CompletedTask;
+    };
 
     // Enrich the principal after a token has been successfully validated.
     options.Events.OnTokenValidated = ctx =>
@@ -216,38 +232,35 @@ the same behaviour as not having the hooks at all.
 
 ### Key rotation across services
 
-Use `HttpPostQuantumJwtKeyRing` to fetch verification keys from a trusted
-HTTPS endpoint (the post-quantum analogue of JWKS). The validator picks the
-key for an incoming token from its `kid` header:
+Use `AddPostQuantumJwtKeyRing(uri)` to fetch verification keys from a
+trusted HTTPS endpoint (the post-quantum analogue of JWKS). The validator
+picks the right key for each incoming token from its `kid` header:
 
 ```csharp
-builder.Services.AddHttpClient<HttpPostQuantumJwtKeyRing>();
-builder.Services.AddSingleton<IPostQuantumJwtKeyRing>(sp =>
-{
-    var http = sp.GetRequiredService<IHttpClientFactory>()
-                 .CreateClient(nameof(HttpPostQuantumJwtKeyRing));
-    return new HttpPostQuantumJwtKeyRing(
-        http,
-        new Uri(builder.Configuration["Auth:KeysEndpoint"]!));
-});
-
 builder.Services
     .AddAuthentication(PostQuantumJwtBearerDefaults.AuthenticationScheme)
     .AddPostQuantumJwtBearer(options =>
     {
-        // The key ring is resolved from the service provider once on first
-        // use and re-used across requests; PqJwtValidator caches the
-        // resulting validator until the options instance is swapped.
-        var keyRing = builder.Services.BuildServiceProvider()
-                                       .GetRequiredService<IPostQuantumJwtKeyRing>();
-
         options.ValidationParameters = new PqJwtValidationParameters
         {
-            SignatureKeyResolver = keyRing.Resolve,
             ValidIssuer   = builder.Configuration["Auth:Issuer"],
             ValidAudience = builder.Configuration["Auth:Audience"],
+            // No key here — the ring supplies it.
         };
     });
+
+// Registers HttpPostQuantumJwtKeyRing as a typed HTTP client and
+// post-configures it onto the named options. No BuildServiceProvider()
+// dance.
+builder.Services.AddPostQuantumJwtKeyRing(
+    new Uri(builder.Configuration["Auth:KeysEndpoint"]!));
+```
+
+For a non-HTTP key source (database, KMS, file), supply your own
+`IPostQuantumJwtKeyRing` implementation and register it generically:
+
+```csharp
+builder.Services.AddPostQuantumJwtKeyRing<MyDatabaseKeyRing>();
 ```
 
 The expected key-directory document is JSON:
@@ -295,9 +308,10 @@ public class ProtectedController : ControllerBase { /* ... */ }
 | `PostQuantumJwtBearerHandler`            | Fail-closed `AuthenticationHandler` that delegates to `PqJwtValidator`. |
 | `PostQuantumJwtBearerOptions`            | Strongly-typed configuration: validation parameters, claim mapping, challenge details. |
 | `PostQuantumJwtBearerDefaults`           | Scheme name and `Bearer` constant.                                     |
-| `PostQuantumJwtBearerEvents`             | `OnTokenValidated` / `OnAuthenticationFailed` / `OnChallenge` async hooks. |
+| `PostQuantumJwtBearerEvents`             | `OnMessageReceived` / `OnTokenValidated` / `OnAuthenticationFailed` / `OnChallenge` async hooks. |
 | `IPostQuantumJwtKeyRing`                 | JWKS-equivalent abstraction for `kid → MLDsa` resolution (sync + async). |
-| `HttpPostQuantumJwtKeyRing`              | HTTP-backed key ring with refresh, in-memory cache, AOT-safe JSON.     |
+| `HttpPostQuantumJwtKeyRing`              | HTTP-backed key ring with refresh, in-memory cache, atomic snapshot swap, AOT-safe JSON. |
+| `PostQuantumJwtKeyRingExtensions`        | `AddPostQuantumJwtKeyRing(...)` DI helpers (HTTP and generic).         |
 | `PostQuantumJwtKeyDirectory` / `…KeyEntry` | DTOs for the key-directory wire format.                              |
 
 ---
@@ -408,8 +422,9 @@ Full detail in [`SECURITY.md`](SECURITY.md) and [`KNOWN-GAPS.md`](KNOWN-GAPS.md)
 ## Building from source
 
 ```bash
-dotnet build
-dotnet test
+dotnet build         # zero warnings (compiler warnings are errors)
+dotnet test          # 31 tests, zero skips on PQ-capable hosts
+dotnet format        # apply the .editorconfig style
 dotnet run --project samples/PostQuantum.AspNetCore.Demo
 ```
 

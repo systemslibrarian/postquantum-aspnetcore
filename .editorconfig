@@ -1,0 +1,44 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{yml,yaml,json,md}]
+indent_size = 2
+
+[*.{cs,csproj,props,targets}]
+indent_size = 4
+
+[*.cs]
+# Modern C# style
+csharp_using_directive_placement = outside_namespace:warning
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_simple_using_statement = true:suggestion
+csharp_style_var_for_built_in_types = true:silent
+csharp_style_var_when_type_is_apparent = true:silent
+csharp_style_var_elsewhere = true:silent
+csharp_style_expression_bodied_methods = when_on_single_line:silent
+csharp_style_expression_bodied_constructors = false:silent
+csharp_style_expression_bodied_properties = when_on_single_line:silent
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+
+# Naming
+dotnet_naming_rule.private_fields_should_be_underscore.severity = warning
+dotnet_naming_rule.private_fields_should_be_underscore.symbols  = private_fields
+dotnet_naming_rule.private_fields_should_be_underscore.style    = underscore_prefix
+dotnet_naming_symbols.private_fields.applicable_kinds           = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_prefix.required_prefix           = _
+dotnet_naming_style.underscore_prefix.capitalization            = camel_case
+
+# Don't gripe at tests for Method_Scenario_Expected naming
+[**/tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none

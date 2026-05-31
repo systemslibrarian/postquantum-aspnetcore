@@ -10,6 +10,108 @@ versions.
 
 _No changes yet._
 
+## [0.3.0-preview.1] — 2026-05-30
+
+A **10/10 audit pass** release. A self-imposed code review turned up four
+real correctness bugs in `0.2.0-preview.1` plus several "this is the
+ASP.NET Core integration; it needs to *be* the standard" gaps. All of
+them are closed here; the auth contract is unchanged.
+
+### Fixed (correctness)
+
+- **`HttpPostQuantumJwtKeyRing` no longer disposes `MLDsa` instances
+  under in-flight validations.** Previously, a `kid` rotation that
+  replaced an entry called `old.Dispose()` while the engine's
+  `SignatureKeyResolver` could still be holding the reference — a race
+  that surfaced as `ObjectDisposedException` mid-request during key
+  rotation. The cache is now an immutable snapshot that gets atomically
+  swapped (volatile reference), and previous-generation `MLDsa`
+  instances are released by GC once no validator holds them.
+- **Caller cancellation now propagates from `ResolveAsync`.** The catch
+  filter in `RefreshAsync` was lumping `TaskCanceledException` in with
+  network/parse failures and log-and-swallowing it — including genuine
+  caller cancellation. A targeted
+  `catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)`
+  now rethrows.
+- **`WWW-Authenticate` realm is now RFC 7235-compliant quoted-string
+  escaped.** Previously a realm containing `"` or `\` produced a
+  malformed header. Both characters are now backslash-escaped before
+  interpolation.
+- **`Bearer` prefix matching is case-insensitive (RFC 6750).** The
+  ordinal compare in `HandleAuthenticateAsync` was a footgun for clients
+  that send `bearer` (lowercase) — perfectly valid per the RFC. Match is
+  now `OrdinalIgnoreCase`.
+
+### Added
+
+- **`PostQuantumJwtBearerEvents.OnMessageReceived`** — runs before the
+  `Authorization` header is read. Set
+  `PostQuantumJwtBearerMessageReceivedContext.Token` to substitute a
+  token from a non-standard carrier: SignalR `?access_token=`, a signed
+  cookie, a custom header. Unblocks SignalR and any non-Authorization-header
+  transport.
+- **`PostQuantumJwtBearerOptions.KeyRing`** — a first-class
+  `IPostQuantumJwtKeyRing` slot. The handler weaves the ring's
+  `Resolve` method onto `SignatureKeyResolver` at validator construction,
+  giving users a way to wire JWKS-equivalent key resolution without
+  cloning `PqJwtValidationParameters` by hand.
+- **`AddPostQuantumJwtKeyRing(...)` DI helpers** — both an HTTP overload
+  (registers `HttpPostQuantumJwtKeyRing` as a typed client) and a
+  generic overload for user-supplied implementations. Replaces the
+  README's previous `BuildServiceProvider()` anti-pattern with a
+  `PostConfigure<TOptions, TDep>` pattern that resolves the ring from
+  the real service provider.
+- **`PostQuantumJwtBearerOptions.Validate()` override** — the framework
+  calls it during named-options materialisation. Throws when no key
+  source is configured, so misconfiguration fails at startup rather
+  than on the first request.
+- **`docs/adr/0001-no-algorithm-agility.md`** — ADR locking in the
+  single-suite decision for the `0.x` series, with an explicit "when
+  would we reconsider" gate.
+- **`docs/PRODUCTION-CHECKLIST.md`** — pre-deployment checklist covering
+  crypto/key material, replay protection, ASP.NET Core wiring,
+  observability, and supply-chain verification.
+- **`docs/DIAGNOSTICS.md`** — top-to-bottom debugging guide for "why is
+  my token failing validation?" with the log-event ID table and the
+  "isolate against the engine" reproduction recipe.
+- **`CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `.github/CODEOWNERS`,
+  PR/issue templates** — repo hygiene matching what consumers expect
+  from a definitive package.
+- **`.editorconfig`** — codifies the formatting baseline.
+- **`scripts/check-version-sync.sh`** — asserts csproj/README/CHANGELOG
+  agree on the version. Wired into CI on every push.
+- **`dotnet format --verify-no-changes` CI job** — formatting drift
+  fails the build.
+- **8 new tests** (handler-level + integration): kid resolution via
+  the key ring (success and unknown-kid fail-closed), kid rotation
+  doesn't ObjectDisposedException, `Validate()` throws at startup with
+  no key source, `OnMessageReceived` substitutes a token from a query
+  string, realm with embedded `"`/`\` produces a parseable header, and
+  cancellation propagates through `ResolveAsync`. **31 tests total,
+  zero skips on PQ-capable hosts.**
+
+### Changed
+
+- **`HttpPostQuantumJwtKeyRing` cache is now an immutable-snapshot
+  atomic swap.** Each refresh builds a fresh `Dictionary<string, MLDsa>`
+  and assigns it to the volatile `_cache` field. Readers see either the
+  pre- or post-refresh snapshot — never a torn intermediate, and never
+  a disposed key.
+- **Unknown-`kid` refresh is now throttled** (10-second floor between
+  forced refreshes from cache misses) to prevent a flood of unknown
+  `kid` requests from amplifying into a directory-fetch storm.
+- **`OnTokenValidated` is wrapped in try/catch** — a throwing
+  enrichment callback flows through `OnAuthenticationFailed` and ends
+  with a fail-closed 401, never a 500.
+
+### Known limitations
+
+- See `KNOWN-GAPS.md` — the residual list is now down to the
+  sync-over-async cold-miss bridge on the key ring (blocked on the
+  engine exposing an async `SignatureKeyResolver`) and the author code
+  signing gate (waiting on a code-signing certificate). The test gap
+  and the version-sync gap from v0.2 are closed.
+
 ## [0.2.0-preview.1] — 2026-05-30
 
 A **substance-and-confidence** release. v0.1 proved the shape; v0.2 makes
@@ -116,6 +218,7 @@ release cadence.
 
 ---
 
-[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.2.0-preview.1...HEAD
+[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.3.0-preview.1...HEAD
+[0.3.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.2.0-preview.1...v0.3.0-preview.1
 [0.2.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.1.0-preview.1...v0.2.0-preview.1
 [0.1.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/releases/tag/v0.1.0-preview.1

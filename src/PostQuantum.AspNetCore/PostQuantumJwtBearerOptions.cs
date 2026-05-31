@@ -56,6 +56,15 @@ public sealed class PostQuantumJwtBearerOptions : AuthenticationSchemeOptions
     /// </summary>
     public bool IncludeErrorDetailsInChallenge { get; set; } = true;
 
+    /// <summary>
+    /// Event hooks raised by the handler. Replace individual delegates on
+    /// the supplied instance to react to token validation, failure, or
+    /// challenge moments. The default instance has no-op delegates, so an
+    /// unconfigured options object behaves exactly the same as one without
+    /// events.
+    /// </summary>
+    public new PostQuantumJwtBearerEvents Events { get; set; } = new();
+
     // Clock comes from the inherited AuthenticationSchemeOptions.TimeProvider —
     // set it on Options if you need a deterministic clock for tests or
     // simulated time in production.

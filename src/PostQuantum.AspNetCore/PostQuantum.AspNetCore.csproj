@@ -17,17 +17,17 @@
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <PackageId>PostQuantum.AspNetCore</PackageId>
-    <Version>0.1.0-preview.1</Version>
+    <Version>0.2.0-preview.1</Version>
     <Title>PostQuantum.AspNetCore — quantum-resistant JWT bearer auth for ASP.NET Core</Title>
     <Authors>Paul Clark</Authors>
-    <Description>The definitive ASP.NET Core integration for post-quantum JWT authentication. Adds AddPostQuantumJwtBearer() so hybrid ML-DSA-65 + X-Wing (X25519 / ML-KEM-768) tokens slot into the standard authentication pipeline. Built on the native .NET 10 BCL post-quantum primitives via PostQuantum.Jwt. Fail-closed by construction, small surface, honest about its limits. Preview release — not for production use.</Description>
+    <Description>The definitive ASP.NET Core integration for post-quantum JWT authentication. Adds AddPostQuantumJwtBearer() so hybrid ML-DSA-65 + X-Wing (X25519 / ML-KEM-768) tokens slot into the standard authentication pipeline. Built on the native .NET 10 BCL post-quantum primitives via PostQuantum.Jwt. Fail-closed by construction, small surface, honest about its limits. Includes an event-hook surface (OnTokenValidated / OnAuthenticationFailed / OnChallenge), an HTTP-fetched key ring with async resolution, end-to-end integration tests, and a CycloneDX SBOM packed inside the .nupkg. Preview release — not for production use.</Description>
     <PackageProjectUrl>https://github.com/systemslibrarian/postquantum-aspnetcore</PackageProjectUrl>
     <RepositoryUrl>https://github.com/systemslibrarian/postquantum-aspnetcore</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>jwt;jose;jwe;post-quantum;pqc;ml-dsa;ml-kem;x-wing;hybrid;aspnetcore;authentication;jwtbearer;net10</PackageTags>
-    <PackageReleaseNotes>0.1.0-preview.1: Initial preview. AddPostQuantumJwtBearer(...) authentication handler for ASP.NET Core, plus an HTTP-fetched key ring (the post-quantum analogue of JWKS) for kid-based rotation across services. Fail-closed by construction. See KNOWN-GAPS.md before depending on this for anything that matters.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.2.0-preview.1: Substance-and-confidence release. New PostQuantumJwtBearerEvents surface (OnTokenValidated / OnAuthenticationFailed / OnChallenge). IPostQuantumJwtKeyRing.ResolveAsync hook; HttpPostQuantumJwtKeyRing overrides it natively async. Microsoft.AspNetCore.Mvc.Testing-backed integration suite (18 tests, zero skips on PQ-capable hosts). GitHub Actions ci.yml + release.yml with a nuget-publish environment gate, SHA256SUMS, build-provenance attestations, and optional author signing. CycloneDX SBOM packed inside the .nupkg. PackageValidationBaselineVersion wired (opt-in). Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md — known limitations: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/KNOWN-GAPS.md.</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Copyright>Copyright © Paul Clark</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
@@ -41,6 +41,11 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <EnablePackageValidation>true</EnablePackageValidation>
+    <!-- API-surface baseline check. Opt-in via `-p:EnableBaselineValidation=true`
+         once 0.1.0-preview.1 is on nuget.org; until then the pack would fail
+         because the baseline package can't be resolved. Local builds and the
+         default CI runs deliberately leave this off. -->
+    <PackageValidationBaselineVersion Condition="'$(EnableBaselineValidation)' == 'true'">0.1.0-preview.1</PackageValidationBaselineVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -57,5 +62,35 @@
     <None Include="../../LICENSE" Pack="true" PackagePath="\" />
     <None Include="../../CHANGELOG.md" Pack="true" PackagePath="\" Condition="Exists('../../CHANGELOG.md')" />
   </ItemGroup>
+
+  <!-- Generate a CycloneDX SBOM (bom.json) inside the package on every Pack.
+       Requires the `dotnet-CycloneDX` global tool (install via
+       `dotnet tool install` with the `global` flag and id `CycloneDX`).
+       If the tool isn't present (e.g. a fresh dev machine), pack
+       continues without the SBOM rather than failing; the release
+       workflow installs the tool unconditionally, so CI always produces
+       the SBOM.
+
+       The bom.json is added to the package via an in-target ItemGroup
+       because $(IntermediateOutputPath)bom.json doesn't exist at the
+       time a static None Include would be evaluated. -->
+  <Target Name="GenerateCycloneDxSbom"
+          BeforeTargets="GenerateNuspec;_GetPackageFiles"
+          Condition="'$(IsPackable)' != 'false'">
+    <Exec Command="dotnet CycloneDX &quot;$(MSBuildProjectFullPath)&quot; --output &quot;$(IntermediateOutputPath.TrimEnd('\').TrimEnd('/'))&quot; --filename bom.json --json"
+          IgnoreExitCode="true"
+          ContinueOnError="WarnAndContinue">
+      <Output TaskParameter="ExitCode" PropertyName="_CycloneDxExitCode" />
+    </Exec>
+    <Message Importance="high"
+             Text="CycloneDX SBOM not generated (tool missing or failed, exit=$(_CycloneDxExitCode)). Install with: dotnet tool install (global, id=CycloneDX)."
+             Condition="'$(_CycloneDxExitCode)' != '0'" />
+    <ItemGroup Condition="Exists('$(IntermediateOutputPath)bom.json')">
+      <None Include="$(IntermediateOutputPath)bom.json" Pack="true" PackagePath="\" />
+    </ItemGroup>
+    <Message Importance="high"
+             Text="CycloneDX SBOM packed into .nupkg at /bom.json"
+             Condition="Exists('$(IntermediateOutputPath)bom.json')" />
+  </Target>
 
 </Project>

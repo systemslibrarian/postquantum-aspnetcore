@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release, warnings as errors)
+        run: dotnet build -c Release --no-restore
+
+      # The native ML-KEM / ML-DSA primitives require OpenSSL 3.5+. Stock GitHub
+      # runners may ship an older OpenSSL on Linux, in which case the post-quantum
+      # tests SKIP THEMSELVES (with a stated reason) rather than fail. The Linux
+      # lane is therefore "portability + non-PQ paths"; cryptographic assurance
+      # lives on the Windows lane and the linux-pq-required job below.
+      - name: Report OpenSSL version
+        if: runner.os == 'Linux'
+        run: openssl version
+
+      - name: Test (Release)
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet test -c Release --no-build --logger "console;verbosity=minimal" | tee test-output.log
+
+      # On Windows the runner has the native ML-KEM / ML-DSA primitives, so
+      # every PqcFact test MUST run. If anything skipped, we are no longer
+      # proving the cryptographic paths in CI — fail the job.
+      - name: Require zero skipped tests on Windows (PQ paths must run)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary=$(grep -E '^(Passed!|Failed!)' test-output.log | tail -1)
+          echo "Test summary line: $summary"
+          if [[ -z "$summary" ]]; then
+            echo "::error::Could not locate the dotnet test summary line."
+            exit 1
+          fi
+          skipped=$(echo "$summary" | grep -oE 'Skipped:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1)
+          if [[ -z "$skipped" ]]; then
+            echo "::error::Could not extract Skipped count from test output."
+            exit 1
+          fi
+          if [[ "$skipped" -ne 0 ]]; then
+            echo "::error::Windows CI lane is the PQ-required lane; $skipped test(s) skipped."
+            echo "This usually means the ML-KEM/ML-DSA primitives weren't available to the runner."
+            exit 1
+          fi
+          echo "PQ-required check passed: 0 skipped tests on Windows."
+
+  linux-pq-required:
+    # Linux PQ-pinned lane: installs OpenSSL 3.5+ via conda-forge and runs the
+    # full suite with LD_LIBRARY_PATH pointed at it, then asserts zero skips.
+    # Stands alongside the Windows lane as cross-platform proof that the
+    # ML-KEM / ML-DSA paths actually executed in CI.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Set up miniconda + OpenSSL 3.5
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: false
+          activate-environment: pq
+          channels: conda-forge
+
+      - name: Install OpenSSL 3.5+ from conda-forge
+        run: |
+          conda install -y -n pq -c conda-forge "openssl>=3.5"
+          "$CONDA/envs/pq/bin/openssl" version
+          echo "PQ_OPENSSL_LIB=$CONDA/envs/pq/lib" >> "$GITHUB_ENV"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build -c Release --no-restore
+
+      - name: Test (Release) with PQ-capable OpenSSL on LD_LIBRARY_PATH
+        run: |
+          set -o pipefail
+          LD_LIBRARY_PATH="$PQ_OPENSSL_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+            dotnet test -c Release --no-build --logger "console;verbosity=minimal" \
+            | tee test-output.log
+
+      - name: Require zero skipped tests on Linux (PQ paths must run)
+        run: |
+          set -euo pipefail
+          summary=$(grep -E '^(Passed!|Failed!)' test-output.log | tail -1)
+          echo "Test summary line: $summary"
+          if [[ -z "$summary" ]]; then
+            echo "::error::Could not locate the dotnet test summary line."
+            exit 1
+          fi
+          skipped=$(echo "$summary" | grep -oE 'Skipped:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1)
+          if [[ -z "$skipped" ]]; then
+            echo "::error::Could not extract Skipped count from test output."
+            exit 1
+          fi
+          if [[ "$skipped" -ne 0 ]]; then
+            echo "::error::Linux PQ-required lane: $skipped test(s) skipped — OpenSSL 3.5+ should make ML-KEM/ML-DSA available."
+            exit 1
+          fi
+          echo "PQ-required check passed on Linux: 0 skipped tests."
+
+  pack-verify:
+    # Make sure the package itself builds cleanly on every PR — catches
+    # metadata regressions long before a release tag is pushed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Install CycloneDX SBOM tool
+        run: dotnet tool install --global CycloneDX
+
+      - name: Pack (Release)
+        run: dotnet pack src/PostQuantum.AspNetCore/PostQuantum.AspNetCore.csproj -c Release -o artifacts
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: nuget-package-${{ github.sha }}
+          path: artifacts/*.*nupkg
+          if-no-files-found: error
+          retention-days: 14

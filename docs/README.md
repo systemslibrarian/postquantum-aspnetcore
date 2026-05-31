@@ -1,13 +1,15 @@
 # docs/
 
-Long-form documentation slot.
+Long-form documentation.
 
-For now, the canonical references live in:
+- [`MIGRATION.md`](MIGRATION.md) — migrating from `PostQuantum.Jwt.AspNetCore`
+  (the engine repo's companion). Diff-style step-by-step plus the full type
+  mapping.
+
+The high-traffic references live at the repo root:
 
 - [`../README.md`](../README.md) — overview, usage, defaults, API surface
 - [`../SECURITY.md`](../SECURITY.md) — threat model and security posture
-- [`../KNOWN-GAPS.md`](../KNOWN-GAPS.md) — honest list of v0.1 limitations
+- [`../KNOWN-GAPS.md`](../KNOWN-GAPS.md) — honest list of current limitations
 - [`../CLAUDE.md`](../CLAUDE.md) — engineering conventions
-
-Design notes, ADRs, and migration guides will land here once the public
-surface stabilises and there's enough motion to justify a separate file.
+- [`../CHANGELOG.md`](../CHANGELOG.md) — release notes

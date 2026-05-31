@@ -25,5 +25,29 @@ public interface IPostQuantumJwtKeyRing
     /// </summary>
     /// <param name="keyId">The token's <c>kid</c> header value (may be <see langword="null"/>).</param>
     /// <returns>The verification key, or <see langword="null"/>.</returns>
+    /// <remarks>
+    /// This synchronous shape matches
+    /// <c>PqJwtValidationParameters.SignatureKeyResolver</c>, which is itself
+    /// synchronous in the current engine. For HTTP-backed implementations,
+    /// prefer warming the cache via <see cref="ResolveAsync"/> /
+    /// <c>PreloadAsync</c> at startup so this hot path never has to block.
+    /// </remarks>
     MLDsa? Resolve(string? keyId);
+
+    /// <summary>
+    /// Asynchronously resolves a verification key for a given <c>kid</c>,
+    /// or <see langword="null"/> if the kid is not known.
+    /// </summary>
+    /// <param name="keyId">The token's <c>kid</c> header value (may be <see langword="null"/>).</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>A task whose result is the verification key or <see langword="null"/>.</returns>
+    /// <remarks>
+    /// The default implementation delegates to <see cref="Resolve"/> and
+    /// wraps the result in a completed task — fine for in-memory key rings.
+    /// Implementations that perform I/O (HTTP, database, KMS) should
+    /// override this with a natively-async path so warming the cache from
+    /// background services doesn't block a thread.
+    /// </remarks>
+    ValueTask<MLDsa?> ResolveAsync(string? keyId, CancellationToken cancellationToken = default)
+        => new(Resolve(keyId));
 }

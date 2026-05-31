@@ -5,7 +5,7 @@ do, what is unverified, and where the sharp edges are. Honesty over polish:
 if something is incomplete, it is listed here rather than glossed over. This
 file is part of the contract with anyone evaluating the package.
 
-Last reviewed for: `0.1.0-preview.1`.
+Last reviewed for: `0.2.0-preview.1`.
 
 ## Inherited from `PostQuantum.Jwt`
 
@@ -24,16 +24,6 @@ for the full list.
 
 ## Specific to this package
 
-### Tests
-
-- **No test project yet.** `0.1.0-preview.1` ships with the `tests/` folder
-  reserved but empty. The first follow-up release will land a `TestServer`-based
-  suite that locks the fail-closed contract at the HTTP boundary: tampered
-  token → 401, missing header → no result, wrong scheme → no result, valid
-  token → 200 with the expected `ClaimsPrincipal`. Until then, the contract
-  rests entirely on the engine's 68 tests plus manual exercise via the demo
-  sample.
-
 ### Target framework
 
 - **`net10.0` only.** Multi-targeting `net8.0;net9.0;net10.0` was scoped but
@@ -45,12 +35,14 @@ for the full list.
 
 ### Key ring
 
-- **HTTP key ring fetches synchronously inside `Resolve`.** When a `kid`
-  miss triggers a refresh, the lookup is currently synchronous
-  (`.GetAwaiter().GetResult()`) because `SignatureKeyResolver` is a
-  synchronous delegate in the engine. This is acceptable for a cached
-  hot path but blocks a thread on cold lookups. An async resolver hook on
-  the engine side would let us drop the sync-over-async; tracked upstream.
+- **HTTP key ring's `Resolve` is sync-over-async on cold-miss.** Native
+  `ResolveAsync` exists (and is the right path for warm-up via
+  `PreloadAsync`), but the engine's `SignatureKeyResolver` is still a
+  synchronous delegate, so a cold cache miss inside an auth request
+  blocks a thread via `.GetAwaiter().GetResult()`. Tracked upstream for a
+  fully-async resolver hook; in the meantime, **warm the cache at
+  startup** with `PreloadAsync` (or via a hosted background service) to
+  keep the hot path off the blocking path.
 - **No ETag / `Cache-Control` awareness.** The HTTP key ring re-fetches on
   a fixed `refreshInterval` (default 5 minutes) and on unknown-`kid` misses.
   It does not honour HTTP caching headers. For a slow-changing directory
@@ -67,11 +59,6 @@ for the full list.
 
 ### Handler
 
-- **No `JwtBearerEvents`-equivalent.** The standard handler exposes a rich
-  `OnAuthenticationFailed`, `OnTokenValidated`, `OnChallenge`, etc. event
-  surface. This handler does not — yet. If you need to enrich the
-  `ClaimsPrincipal` or react to failures, do it in middleware or a derived
-  handler in the meantime.
 - **No automatic forwarded-header trust.** The handler reads the
   `Authorization` header directly from `HttpContext.Request`. If your
   deployment terminates TLS upstream and rewrites headers, ensure
@@ -81,19 +68,31 @@ for the full list.
   `Authorization` header with a literal `Bearer ` prefix. No support for
   query-string or cookie-borne tokens — by design (cookies are a poor
   carrier for ~4.5 KB post-quantum tokens), but worth knowing.
+- **No `OnMessageReceived` / `OnForbidden` events.** The current event
+  surface is the three hooks consumers actually reach for
+  (`OnTokenValidated`, `OnAuthenticationFailed`, `OnChallenge`). The
+  remaining `JwtBearerEvents`-style hooks are not implemented because no
+  consumer has asked yet; if you need one, please open an issue with the
+  scenario.
 
 ### Packaging / CI
 
-- **No CI workflow yet.** `0.1.0-preview.1` ships from a local build. A
-  GitHub Actions workflow that mirrors `PostQuantum.Jwt`'s `pack` +
-  `publish` split, with a `nuget-publish` environment gate and
-  build-provenance attestations, is the next packaging milestone.
-- **No CycloneDX SBOM inside the `.nupkg` yet.** The engine ships one; this
-  package will follow as soon as the CI lands.
-- **No API baseline check.** `EnablePackageValidation` is on, but no
-  `PackageValidationBaselineVersion` is wired in — that's a v0.2 follow-up
-  once `0.1.0-preview.1` is on nuget.org and there's a baseline to validate
-  against.
+- **Packages are not author-signed by default.** The release workflow has
+  an optional author-signing hook: if a `NUGET_SIGNING_CERT` secret is
+  present on the `nuget-publish` GitHub Environment, packages are signed
+  with `dotnet nuget sign` and a DigiCert timestamp before push. Until a
+  certificate is procured and that secret is populated, packages rely on
+  nuget.org's repository signature alone. Every release also emits GitHub
+  build-provenance attestations for the `.nupkg` and the SBOM — verify
+  with `gh attestation verify <file> --repo systemslibrarian/postquantum-aspnetcore`.
+- **API baseline is opt-in.** `EnablePackageValidation` is on; the
+  baseline comparison against `0.1.0-preview.1` is gated behind
+  `-p:EnableBaselineValidation=true` until that version lands on
+  nuget.org and the baseline package is resolvable.
+- **No version-sync script yet.** The engine repo has
+  `scripts/check-version-sync.sh` to keep the `.csproj`, README, and
+  CHANGELOG aligned. This repo doesn't (yet) — version drift would currently
+  be caught only by the release workflow's tag-vs-csproj check.
 
 ---
 

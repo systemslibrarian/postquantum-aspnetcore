@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="src/PostQuantum.AspNetCore/PostQuantum.AspNetCore.csproj" />
   <Project Path="samples/PostQuantum.AspNetCore.Demo/PostQuantum.AspNetCore.Demo.csproj" />
+  <Project Path="tests/PostQuantum.AspNetCore.Tests/PostQuantum.AspNetCore.Tests.csproj" />
 </Solution>

@@ -55,6 +55,13 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Synchronous lookups against the in-memory cache are non-blocking; a
+    /// miss falls back to <see cref="ResolveAsync"/> via
+    /// <c>GetAwaiter().GetResult()</c>. Prefer warming the cache at startup
+    /// with <see cref="PreloadAsync"/> so cold misses on the hot
+    /// authentication path are rare.
+    /// </remarks>
     public MLDsa? Resolve(string? keyId)
     {
         if (string.IsNullOrEmpty(keyId))
@@ -67,8 +74,27 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
             return cached;
         }
 
+        // Sync-over-async on the cold path only. The engine's
+        // SignatureKeyResolver is currently synchronous, so this is the
+        // narrowest place to bridge.
+        return ResolveAsync(keyId).AsTask().GetAwaiter().GetResult();
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<MLDsa?> ResolveAsync(string? keyId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(keyId))
+        {
+            return null;
+        }
+
+        if (_cache.TryGetValue(keyId, out var cached))
+        {
+            return cached;
+        }
+
         // Unknown kid → give the directory one chance to refresh.
-        RefreshAsync(force: true).GetAwaiter().GetResult();
+        await RefreshAsync(force: true, cancellationToken).ConfigureAwait(false);
         return _cache.TryGetValue(keyId, out var resolved) ? resolved : null;
     }
 

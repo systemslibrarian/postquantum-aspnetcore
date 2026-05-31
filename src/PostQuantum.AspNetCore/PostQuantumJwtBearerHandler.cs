@@ -55,7 +55,7 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
     }
 
     /// <inheritdoc />
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         // No header / wrong scheme → "no result" rather than "fail": lets
         // other schemes registered on the same request get a shot at it.
@@ -63,13 +63,13 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
         if (string.IsNullOrEmpty(authorization) ||
             !authorization.StartsWith(PostQuantumJwtBearerDefaults.BearerPrefix, StringComparison.Ordinal))
         {
-            return Task.FromResult(AuthenticateResult.NoResult());
+            return AuthenticateResult.NoResult();
         }
 
         var token = authorization[PostQuantumJwtBearerDefaults.BearerPrefix.Length..];
         if (string.IsNullOrWhiteSpace(token))
         {
-            return Task.FromResult(AuthenticateResult.NoResult());
+            return AuthenticateResult.NoResult();
         }
 
         PqJwtValidationResult result;
@@ -80,7 +80,12 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
         catch (PqJwtValidationException ex)
         {
             Logger.ValidationFailed(ex);
-            return Task.FromResult(AuthenticateResult.Fail(ex));
+
+            var failed = new PostQuantumJwtBearerAuthenticationFailedContext(
+                Context, Scheme, Options, ex);
+            await Options.Events.OnAuthenticationFailed(failed).ConfigureAwait(false);
+
+            return failed.Result ?? AuthenticateResult.Fail(ex);
         }
 
         var identity = new ClaimsIdentity(
@@ -94,13 +99,28 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
         }
 
         var principal = new ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, Scheme.Name);
-        return Task.FromResult(AuthenticateResult.Success(ticket));
+
+        var validated = new PostQuantumJwtBearerTokenValidatedContext(
+            Context, Scheme, Options, principal, result, token);
+        await Options.Events.OnTokenValidated(validated).ConfigureAwait(false);
+
+        var ticket = new AuthenticationTicket(validated.Principal, Scheme.Name);
+        return AuthenticateResult.Success(ticket);
     }
 
     /// <inheritdoc />
-    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
+    protected override async Task HandleChallengeAsync(AuthenticationProperties properties)
     {
+        var challenge = new PostQuantumJwtBearerChallengeContext(
+            Context, Scheme, Options, properties);
+        await Options.Events.OnChallenge(challenge).ConfigureAwait(false);
+
+        if (challenge.Handled)
+        {
+            // Event handler took over — don't overwrite their response.
+            return;
+        }
+
         var realm = Options.Realm ?? Scheme.Name;
         var header = Options.IncludeErrorDetailsInChallenge
             ? $"Bearer realm=\"{realm}\", error=\"invalid_token\""
@@ -108,7 +128,6 @@ public sealed class PostQuantumJwtBearerHandler : AuthenticationHandler<PostQuan
 
         Response.Headers.WWWAuthenticate = header;
         Response.StatusCode = StatusCodes.Status401Unauthorized;
-        return Task.CompletedTask;
     }
 
     private static void AppendClaim(ClaimsIdentity identity, string name, JsonElement element)

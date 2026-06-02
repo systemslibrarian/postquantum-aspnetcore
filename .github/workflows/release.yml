@@ -93,12 +93,12 @@ jobs:
           echo "------------------------"
 
       - name: Generate build-provenance attestation for the .nupkg files
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: "artifacts/*.nupkg"
 
       - name: Generate build-provenance attestation for the SBOM
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: "artifacts/bom.json"
 

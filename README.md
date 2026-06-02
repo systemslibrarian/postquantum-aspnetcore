@@ -36,10 +36,27 @@ construction. Small surface. Honest about its limits.
 > **equivalent** that knows the right things about ML-DSA-65 — not a
 > reinvention of the crypto stack underneath.
 
-> **Status — `1.0.0-preview.2`.** Preview software. Not for production use.
+> **Status — `1.0.0-preview.3`.** Preview software. Not for production use.
 > The API may change before 1.0, and the underlying cryptographic construction
 > has not been independently audited. Read [`KNOWN-GAPS.md`](KNOWN-GAPS.md)
 > before depending on this for anything that matters.
+
+> **Most ASP.NET Core apps should use this package.** It is the high-level,
+> one-line wire-up for post-quantum JWT bearer auth — event hooks, hosted-
+> service warmup, `Meter` + `ActivitySource` observability, distributed
+> replay-cache wiring, and a DI helper that doesn't force a
+> `BuildServiceProvider()` call. The engine repository also ships a lower-
+> level [`PostQuantum.Jwt.AspNetCore`](https://github.com/systemslibrarian/postquantum-jwt/tree/main/src/PostQuantum.Jwt.AspNetCore)
+> package; that one is the minimal "prove the engine works in ASP.NET Core"
+> surface and lacks those additions. Pick it only if you are deliberately
+> building your own application-layer wiring on top of the engine.
+
+> **Operator note: the HTTP key directory is the root of trust for token
+> validation.** Read [`SECURITY.md#trust-root-the-http-key-directory`](SECURITY.md#trust-root-the-http-key-directory)
+> before shipping — operators are expected to configure certificate pinning
+> or a hardened `HttpClient` on the directory endpoint. The library has no
+> insecure fallback by design; if the fetch fails closed, validation fails
+> closed.
 
 ## Highlights
 
@@ -171,13 +188,13 @@ nothing else.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.AspNetCore --version 1.0.0-preview.2
+dotnet add package PostQuantum.AspNetCore --version 1.0.0-preview.3
 ```
 
 Or in a `.csproj`:
 
 ```xml
-<PackageReference Include="PostQuantum.AspNetCore" Version="1.0.0-preview.2" />
+<PackageReference Include="PostQuantum.AspNetCore" Version="1.0.0-preview.3" />
 ```
 
 **Runtime requirement:** the native ML-KEM / ML-DSA primitives need an
@@ -375,7 +392,7 @@ companion package ships a Redis implementation that's a one-line
 wireup:
 
 ```bash
-dotnet add package PostQuantum.AspNetCore.RedisReplayCache --version 1.0.0-preview.2
+dotnet add package PostQuantum.AspNetCore.RedisReplayCache --version 1.0.0-preview.3
 ```
 
 ```csharp

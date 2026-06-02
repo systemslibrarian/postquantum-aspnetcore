@@ -10,6 +10,71 @@ versions.
 
 _No changes yet._
 
+## [1.0.0-preview.3] — 2026-06-01
+
+A **suite-reconciliation + integration-hardening** release. The PostQuantum.*
+ecosystem reconciled its versions; this is `PostQuantum.AspNetCore`'s
+assigned slot. No crypto changes (there is none in this repo), no API
+breaks, no behaviour changes on the happy path. Hardening additions are
+deployment-shape mitigations that an adversarial review surfaced.
+
+### Changed
+
+- **`PostQuantum.Jwt` engine dependency bumped to `1.0.0-preview.1`** to
+  match the suite target. The engine's own 1.0-preview line maintains honest
+  preview status (no independent audit, IANA still has not registered the
+  `ML-DSA-65` identifier). This package does not advertise more maturity
+  than what it depends on.
+
+### Added
+
+- **`SECURITY.md` — "Trust root: the HTTP key directory" section.** Makes
+  explicit what the model already implied: the HTTPS key-directory endpoint
+  is the root of trust for token validation, the library has no insecure
+  fallback by design, and operators SHOULD configure certificate pinning or
+  a hardened `HttpClient`. The library does not pin certificates for you.
+- **`AddPostQuantumJwtKeyRing(..., configureHttpClient: …)` overload.** A
+  new optional `Action<IHttpClientBuilder>` on the HTTP DI helpers so wiring
+  a pinned `HttpMessageHandler` is the obvious path, not a fork. The default
+  null parameter preserves the existing call sites bit-for-bit.
+- **1 MB cap on the key-directory response.** The DI helper sets
+  `MaxResponseContentBufferSize = 1 MB` on the typed `HttpClient`; a hostile
+  or compromised endpoint trying to drive memory pressure is rejected. The
+  manual `HttpPostQuantumJwtKeyRing` constructor gains an optional
+  `maxResponseBytes` parameter (default `null` = honour caller's
+  `HttpClient` settings, no surprise behavior change).
+- **Unknown-`kid` flood mitigation.** `Resolve` now consults a bounded
+  short-TTL (10s) negative cache *before* the sync-over-async refresh
+  bridge. Under random-`kid` flooding this short-circuits to `null`
+  immediately, without entering `_refreshLock` or burning a thread-pool
+  thread on the bridge. The negative-cache TTL is intentionally equal to
+  the existing forced-refresh throttle window, so the bound on wrong
+  rejection is unchanged: a `kid` which becomes valid after a previous
+  refresh-miss is wrongly rejected for at most 10 seconds, matching the
+  pre-existing throttle window. A `refresh-hit` clears any stale negative
+  entry, and the cache is bounded at 1024 entries.
+
+### Tests
+
+- **`HttpPostQuantumJwtKeyRingTests`** — four new tests covering: concurrent
+  Resolve during atomic-snapshot Refresh, unknown-`kid` flood short-
+  circuiting via the negative cache, negative-cache entries ageing out so a
+  newly-valid `kid` becomes resolvable, and the 1 MB response cap rejecting
+  oversize bodies.
+- **`RedisReplayCacheTests`** — concurrent `TryRegister` against the same
+  `jti`: exactly one caller wins.
+
+### Not changed
+
+- API surface — `1.0.0-preview.2` callers compile and behave identically.
+- Fail-closed contract — same exception filter (`is not (OOM or
+  StackOverflow)`), same `AuthenticateResult.Fail` on every validation
+  failure, same atomic-snapshot key-ring swap.
+- Single-suite policy — non-`ML-DSA-65` entries are still silently dropped
+  at the key-ring boundary.
+- Audit status — the underlying cryptographic construction has not been
+  independently audited. See `KNOWN-GAPS.md`.
+
 ## [1.0.0-preview.2] — 2026-05-31
 
 A **bug-fix preview** on the `1.0.0-preview.1` API surface. No behavior
@@ -696,7 +761,9 @@ release cadence.
 
 ---
 
-[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v1.0.0-preview.1...HEAD
+[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v1.0.0-preview.3...HEAD
+[1.0.0-preview.3]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v1.0.0-preview.2...v1.0.0-preview.3
+[1.0.0-preview.2]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v1.0.0-preview.1...v1.0.0-preview.2
 [1.0.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.9.1-preview.1...v1.0.0-preview.1
 [0.9.1-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.9.0-preview.1...v0.9.1-preview.1
 [0.9.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.8.0-preview.1...v0.9.0-preview.1

@@ -17,7 +17,7 @@
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <PackageId>PostQuantum.AspNetCore</PackageId>
-    <Version>1.0.0-preview.2</Version>
+    <Version>1.0.0-preview.3</Version>
     <Title>PostQuantum.AspNetCore — post-quantum JWT authentication for ASP.NET Core</Title>
     <Authors>Paul Clark</Authors>
     <Description>The high-level ASP.NET Core integration for post-quantum JWT authentication. Add one line — AddPostQuantumJwtBearer() — and hybrid ML-DSA-65 + X-Wing tokens authenticate through the standard ASP.NET Core pipeline exactly the way AddJwtBearer always has: same AuthenticationBuilder, same [Authorize], same ClaimsPrincipal. Fail-closed by construction, AOT-compatible, observable via System.Diagnostics (Metrics + ActivitySource). This is the application-layer wiring (handler, options, four event hooks, JWKS-equivalent key ring, hosted-service warmup) — NOT a cryptography library. The actual ML-DSA / X-Wing / AES-GCM work happens in PostQuantum.Jwt and the .NET 10 BCL primitives; we sit on top of them. Distributed single-use-jti enforcement available via the companion PostQuantum.AspNetCore.RedisReplayCache package. Preview release — the API surface is what we expect to ship in 1.0; the cryptographic construction is not yet independently audited. See KNOWN-GAPS.md before depending on this for anything that matters.</Description>
@@ -27,7 +27,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>jwt;jose;authentication;jwtbearer;aspnetcore;post-quantum;pqc;ml-dsa;ml-kem;x-wing;hybrid;quantum-resistant;net10</PackageTags>
-    <PackageReleaseNotes>1.0.0-preview.2: Bug-fix preview on the 1.0.0-preview.1 surface. (1) PostQuantumJwtBearerMessageReceivedContext now exposes a settable Result property; setting it short-circuits the handler so OnMessageReceived can return AuthenticateResult.NoResult() or AuthenticateResult.Fail(...) directly — matches the stock Microsoft.AspNetCore.Authentication.JwtBearer pattern. (2) PostQuantumJwtBearerTokenValidatedContext gains the same Result property — lets the OnTokenValidated handler reject a cryptographically valid token based on custom authorization rules. (3) The challenge step now appends to WWW-Authenticate rather than overwriting it, so other middleware's challenge headers (e.g. Basic from a different scheme) survive the post-quantum bearer challenge. Three new tests cover each fix; full suite is 69/69 green. Same API stability promise, same audit-pending status as preview.1 — see KNOWN-GAPS.md. Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>1.0.0-preview.3: Suite-reconciliation + integration-hardening release. (1) Suite version reconciliation — PostQuantum.Jwt engine dependency moves to 1.0.0-preview.1 to align with the wider PostQuantum.* ecosystem; no source-level API change vs 1.0.0-preview.2. (2) Trust-root documentation — SECURITY.md gains an explicit "Trust root: the HTTP key directory" section telling operators that the HTTPS key-directory endpoint is the root of trust for token validation and SHOULD be protected with certificate pinning or a hardened HttpClient. (3) AddPostQuantumJwtKeyRing(...) gains an optional configureHttpClient hook so wiring a pinned HttpMessageHandler is the obvious path, not a fork. (4) Bounded key-directory response — the DI helper now caps the typed HttpClient at MaxResponseContentBufferSize=1MB; manual constructors get an optional maxResponseBytes parameter (default unchanged). (5) Unknown-kid flood mitigation — Resolve now short-circuits via a bounded short-TTL negative cache before the sync-over-async bridge; a kid which becomes valid is wrongly rejected for at most 10 seconds, matching the pre-existing forced-refresh throttle (no regression to that bound). No change to fail-closed behaviour, no change to the single-suite policy. Full suite green. See KNOWN-GAPS.md and VERSION-RECONCILIATION.md. Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md.</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Copyright>Copyright © Paul Clark</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
@@ -54,7 +54,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="PostQuantum.Jwt" Version="0.3.0-preview.1" />
+    <PackageReference Include="PostQuantum.Jwt" Version="1.0.0-preview.1" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 

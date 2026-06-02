@@ -5,7 +5,7 @@ do, what is unverified, and where the sharp edges are. Honesty over polish:
 if something is incomplete, it is listed here rather than glossed over. This
 file is part of the contract with anyone evaluating the package.
 
-Last reviewed for: `1.0.0-preview.2`.
+Last reviewed for: `1.0.0-preview.3`.
 
 ## Inherited from `PostQuantum.Jwt`
 
@@ -39,17 +39,31 @@ for the full list.
   `ResolveAsync` exists (and is the right path for warm-up via
   `PreloadAsync`), but the engine's `SignatureKeyResolver` is still a
   synchronous delegate, so a cold cache miss inside an auth request
-  blocks a thread via `.GetAwaiter().GetResult()`. Tracked upstream for a
-  fully-async resolver hook; in the meantime, **warm the cache at
-  startup** with `AddPostQuantumJwtKeyRingWarmup(...)` to keep the hot
-  path off the blocking bridge.
+  blocks a thread via `.GetAwaiter().GetResult()`. As of `preview.3` the
+  hot path is protected against unknown-`kid` flooding by a bounded
+  short-TTL (10s) negative cache that short-circuits *before* the
+  bridge — see [Trust root in SECURITY.md](SECURITY.md#trust-root-the-http-key-directory)
+  for the bound. Fully removing the bridge is still blocked on the
+  engine exposing an async `SignatureKeyResolver`; in the meantime,
+  **warm the cache at startup** with `AddPostQuantumJwtKeyRingWarmup(...)`
+  to keep the hot path off the bridge entirely.
 - **No ETag / `Cache-Control` awareness.** The HTTP key ring re-fetches on
   a fixed `refreshInterval` (default 5 minutes) and on unknown-`kid` misses.
   It does not honour HTTP caching headers. For a slow-changing directory
   this is fine; for a high-churn one, pick the interval accordingly.
-- **No certificate / hostname pinning.** Trust the supplied `HttpClient`'s
-  TLS configuration. Configure pinning at the `HttpClientHandler` level if
-  your threat model needs it.
+- **No built-in certificate / hostname pinning.** The HTTP key directory
+  is the **root of trust for token validation** (see
+  [SECURITY.md](SECURITY.md#trust-root-the-http-key-directory)). The
+  library does not pin certificates for you; operators SHOULD configure
+  pinning or a hardened `HttpMessageHandler` on the typed `HttpClient`.
+  `AddPostQuantumJwtKeyRing(..., configureHttpClient: …)` exposes the
+  obvious DI hook for that.
+- **Key-directory response is bounded at 1 MB by default.** Applied via
+  `HttpClient.MaxResponseContentBufferSize` when you use the DI helper.
+  A real directory is tens of keys × a few hundred bytes; 1 MB is
+  ~3 orders of magnitude of headroom. If your directory is genuinely
+  larger, override via the `configureHttpClient` hook or the
+  `maxResponseBytes` constructor parameter.
 - **No key-rotation rollover window.** When a key is removed from the
   upstream directory, the local cache only drops it on the next successful
   full refresh; tokens signed with that key keep validating against the

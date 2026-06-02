@@ -19,6 +19,12 @@ artifacts/
 *.snupkg
 .nuget/
 nuget.key.txt
+# Dev-only local feed for suite-reconciliation windows (e.g. when a
+# pinned PostQuantum.* version is not yet on nuget.org). Must NOT land
+# in the repo — a tracked NuGet.Config pointing at .local-packages
+# would break clean-machine / CI restore.
+NuGet.Config
+.local-packages/
 
 # OS
 .DS_Store

@@ -39,18 +39,44 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
     private DateTimeOffset _lastFetched = DateTimeOffset.MinValue;
     private bool _disposed;
 
+    // Bounded short-TTL negative cache for unknown kids. A kid confirmed
+    // missing by a recent refresh is short-circuited to null *before* we
+    // enter the sync-over-async bridge — so random-kid floods don't
+    // serialise every miss through _refreshLock. The TTL is intentionally
+    // equal to the forced-refresh throttle window (10s) so the bound on
+    // wrong rejection — "a kid which becomes valid is wrongly rejected
+    // for at most NegativeCacheTtl after a refresh-miss" — matches the
+    // bound that the throttle already imposed. Values are timestamps in
+    // UtcTicks taken from _timeProvider.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _negativeCache
+        = new(StringComparer.Ordinal);
+    private const int MaxNegativeCacheEntries = 1024;
+    private static readonly TimeSpan NegativeCacheTtl = TimeSpan.FromSeconds(10);
+
     /// <summary>Creates an HTTP-backed key ring.</summary>
     /// <param name="httpClient">An <see cref="HttpClient"/> (typed-client friendly).</param>
     /// <param name="endpoint">The fully-qualified key-directory URL. Must be HTTPS in production.</param>
     /// <param name="refreshInterval">How often the directory may be re-fetched. Defaults to 5 minutes.</param>
     /// <param name="timeProvider">Clock used for refresh timing.</param>
     /// <param name="logger">Optional logger.</param>
+    /// <param name="maxResponseBytes">
+    /// Optional cap on the size of the JSON key-directory response. When
+    /// supplied, applied to <see cref="HttpClient.MaxResponseContentBufferSize"/>
+    /// on the supplied <paramref name="httpClient"/>; oversize responses
+    /// surface as <see cref="HttpRequestException"/> and fail closed via
+    /// the standard fetch-failure path. Default <see langword="null"/>
+    /// preserves the caller's existing <c>HttpClient</c> settings — no
+    /// surprise behavior change for callers wiring the ring manually.
+    /// The <see cref="PostQuantumJwtKeyRingExtensions.AddPostQuantumJwtKeyRing(Microsoft.Extensions.DependencyInjection.IServiceCollection, Uri, TimeSpan?, Action{Microsoft.Extensions.DependencyInjection.IHttpClientBuilder}?)"/>
+    /// DI helper supplies a 1 MB cap by default.
+    /// </param>
     public HttpPostQuantumJwtKeyRing(
         HttpClient httpClient,
         Uri endpoint,
         TimeSpan? refreshInterval = null,
         TimeProvider? timeProvider = null,
-        ILogger<HttpPostQuantumJwtKeyRing>? logger = null)
+        ILogger<HttpPostQuantumJwtKeyRing>? logger = null,
+        long? maxResponseBytes = null)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -59,6 +85,15 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
         _refreshInterval = refreshInterval ?? TimeSpan.FromMinutes(5);
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger;
+
+        if (maxResponseBytes is { } cap)
+        {
+            // HttpClient.MaxResponseContentBufferSize throws
+            // InvalidOperationException if a request has already been
+            // sent on this client — surface that immediately rather than
+            // silently mis-configure the cap.
+            _httpClient.MaxResponseContentBufferSize = cap;
+        }
     }
 
     /// <inheritdoc />
@@ -79,6 +114,16 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
         if (_cache.TryGetValue(keyId, out var cached))
         {
             return cached;
+        }
+
+        // Short-circuit: this kid was confirmed missing by a refresh
+        // very recently. Cheap path; no lock, no sync-over-async hop.
+        // Prevents random-kid floods from serialising every miss through
+        // _refreshLock. Bound on wrong rejection equals NegativeCacheTtl
+        // (10s), matching the existing forced-refresh throttle window.
+        if (IsRecentlyMissing(keyId))
+        {
+            return null;
         }
 
         // Sync-over-async on the cold path only. The engine's
@@ -110,15 +155,71 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
         await RefreshAsync(force: true, throwOnFailure: false, cancellationToken).ConfigureAwait(false);
         if (_cache.TryGetValue(keyId, out var resolved))
         {
+            // Clear any stale negative entry — a kid that's now resolvable
+            // must not be short-circuited as missing on the next call.
+            _negativeCache.TryRemove(keyId, out _);
             PostQuantumJwtBearerDiagnostics.KeyRingResolve.Add(1,
                 new KeyValuePair<string, object?>("result", "refresh-hit"));
             return resolved;
         }
 
+        // Confirmed missing after a forced refresh. Stamp the negative
+        // cache so the next miss for the same kid (within NegativeCacheTtl)
+        // short-circuits without the sync-over-async bridge or the lock.
+        RememberMissing(keyId);
+
         PostQuantumJwtBearerDiagnostics.KeyRingResolve.Add(1,
             new KeyValuePair<string, object?>("result", "refresh-miss"));
         return null;
     }
+
+    private bool IsRecentlyMissing(string keyId)
+    {
+        if (!_negativeCache.TryGetValue(keyId, out var stampTicks))
+        {
+            return false;
+        }
+
+        var ageTicks = _timeProvider.GetUtcNow().UtcTicks - stampTicks;
+        if (ageTicks < NegativeCacheTtl.Ticks)
+        {
+            return true;
+        }
+
+        // Stale — drop on lookup so we don't keep aged entries around
+        // indefinitely. The bounded-size guard below also keeps the dict
+        // small under floods, but lookup-time eviction is the primary
+        // cleanup path.
+        _negativeCache.TryRemove(keyId, out _);
+        return false;
+    }
+
+    private void RememberMissing(string keyId)
+    {
+        // Bounded: if we'd grow past the cap, drop one arbitrary entry.
+        // Not LRU — entries naturally expire on lookup; the cap exists
+        // only to prevent a flood of unique random kids from ballooning
+        // memory. Correctness is unaffected by which entry we drop.
+        if (_negativeCache.Count >= MaxNegativeCacheEntries)
+        {
+            foreach (var kvp in _negativeCache)
+            {
+                if (_negativeCache.TryRemove(kvp.Key, out _))
+                {
+                    break;
+                }
+            }
+        }
+
+        _negativeCache[keyId] = _timeProvider.GetUtcNow().UtcTicks;
+    }
+
+    /// <summary>
+    /// Test-only: current size of the negative cache. Behind
+    /// <c>InternalsVisibleTo("PostQuantum.AspNetCore.Tests")</c>; not part
+    /// of the public surface and may change without notice.
+    /// </summary>
+    internal int DebugNegativeCacheCount => _negativeCache.Count;
 
     /// <summary>
     /// Preloads the directory. Used by the warmup hosted service to warm

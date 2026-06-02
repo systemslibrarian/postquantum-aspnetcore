@@ -165,7 +165,7 @@ public static class PostQuantumJwtKeyRingWarmupExtensions
     /// <param name="configure">Optional configuration callback.</param>
     /// <returns>The same service collection.</returns>
     /// <remarks>
-    /// Call this after <see cref="PostQuantumJwtKeyRingExtensions.AddPostQuantumJwtKeyRing(IServiceCollection, Uri, TimeSpan?)"/>
+    /// Call this after <see cref="PostQuantumJwtKeyRingExtensions.AddPostQuantumJwtKeyRing(IServiceCollection, Uri, TimeSpan?, Action{IHttpClientBuilder}?)"/>
     /// (or any other registration that puts an
     /// <see cref="IPostQuantumJwtKeyRing"/> in DI). Without a ring in DI,
     /// the hosted service throws at startup — and that's the right time

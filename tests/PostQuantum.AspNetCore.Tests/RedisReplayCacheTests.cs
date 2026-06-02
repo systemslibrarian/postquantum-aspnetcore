@@ -128,6 +128,57 @@ public sealed class RedisReplayCacheTests
             cache.TryRegister(string.Empty, DateTimeOffset.UtcNow));
     }
 
+    [Fact]
+    public async Task TryRegister_ConcurrentReplaysSameJti_ExactlyOneRegisters()
+    {
+        // Finding 5: distributed single-use jti enforcement must be safe
+        // under concurrent replay. The NSubstitute stub models Redis's
+        // SET NX semantics atomically against a ConcurrentDictionary, so
+        // any race in the cache wrapper would surface as multiple
+        // TryRegister calls returning true for the same jti.
+        var store = new System.Collections.Concurrent.ConcurrentDictionary<string, StoredEntry>(StringComparer.Ordinal);
+        var db = Substitute.For<IDatabase>();
+        db.StringSetAsync(
+            Arg.Any<RedisKey>(),
+            Arg.Any<RedisValue>(),
+            Arg.Any<TimeSpan?>(),
+            Arg.Any<bool>(),
+            Arg.Any<When>(),
+            Arg.Any<CommandFlags>())
+            .Returns(call =>
+            {
+                var key = (string)call.ArgAt<RedisKey>(0)!;
+                var value = call.ArgAt<RedisValue>(1);
+                var expiry = call.ArgAt<TimeSpan?>(2);
+                var when = call.ArgAt<When>(4);
+
+                // SETNX semantics: TryAdd returns true on first add,
+                // false thereafter. Atomic by ConcurrentDictionary contract.
+                if (when == When.NotExists)
+                {
+                    return Task.FromResult(
+                        store.TryAdd(key, new StoredEntry(value, expiry ?? TimeSpan.MaxValue)));
+                }
+
+                store[key] = new StoredEntry(value, expiry ?? TimeSpan.MaxValue);
+                return Task.FromResult(true);
+            });
+
+        var cache = new RedisPqJwtReplayCache(db, "test:");
+
+        const int Concurrent = 64;
+        var sharedJti = "race-jti";
+        var sharedExp = DateTimeOffset.UtcNow.AddMinutes(10);
+
+        var tasks = Enumerable.Range(0, Concurrent)
+            .Select(_ => Task.Run(() => cache.TryRegister(sharedJti, sharedExp)))
+            .ToArray();
+        var results = await Task.WhenAll(tasks);
+
+        Assert.Equal(1, results.Count(r => r));
+        Assert.Equal(Concurrent - 1, results.Count(r => !r));
+    }
+
     // Builds an NSubstitute IDatabase that mimics SETNX semantics
     // against a backing dictionary so tests can observe what landed.
     private static (IDatabase database, Dictionary<string, StoredEntry> store) NewStub()

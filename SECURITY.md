@@ -79,6 +79,59 @@ relevant threats and where they're handled:
 - **Standards interoperability.** Tokens use non-IANA algorithm identifiers
   and are not meant to validate in generic JWT libraries.
 
+## Trust root: the HTTP key directory
+
+When you wire `AddPostQuantumJwtKeyRing(uri)` (or construct
+`HttpPostQuantumJwtKeyRing` directly), **the HTTPS endpoint you point at
+becomes the root of trust for token validation.** A successful
+man-in-the-middle on that endpoint can substitute attacker-controlled
+verification keys and forge any token. The library has **no insecure
+fallback by design**: if the fetch fails closed, validation fails closed.
+
+This package does not pin certificates for you. **Operators should
+configure certificate pinning, a hardened `HttpClient`, or both** on the
+typed client the key ring uses. The recommended pattern is the
+`configureHttpClient` DI hook:
+
+```csharp
+services.AddPostQuantumJwtKeyRing(
+    endpoint: new Uri("https://keys.example.com/pq/keys"),
+    configureHttpClient: builder => builder
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            SslOptions = new SslClientAuthenticationOptions
+            {
+                RemoteCertificateValidationCallback = MyPinningCallback,
+            },
+        }));
+```
+
+Defense-in-depth measures the library does apply by default when you use
+the DI helper:
+
+- **Response-size cap.** `HttpClient.MaxResponseContentBufferSize` is set
+  to **1 MB**. A real key directory is tens of keys × a few hundred
+  bytes; the cap rejects bodies designed to drive memory pressure. The
+  cap can be overridden via `configureHttpClient` if you have a genuinely
+  larger directory.
+- **Single-suite enforcement on the wire.** Entries whose `alg` is
+  anything other than `ML-DSA-65` are silently dropped at the key-ring
+  boundary — a hostile directory cannot trick a consumer into validating
+  an `RS256` token by serving a key with that `alg`.
+- **Atomic-snapshot key rotation.** Refreshes never produce a torn
+  intermediate state; readers see either the pre- or post-refresh
+  snapshot, never both.
+- **Bounded short-TTL negative cache.** A `kid` confirmed missing by a
+  recent refresh is short-circuited to `null` for up to 10 seconds
+  *before* the sync-over-async refresh bridge runs. This deflects
+  random-`kid` flooding from amplifying into thread-pool pressure.
+  The 10-second TTL is intentionally equal to the existing forced-
+  refresh throttle window, so a `kid` which becomes valid after a
+  refresh-miss is wrongly rejected for **at most 10 seconds**, identical
+  to the pre-existing bound.
+
+See also `KNOWN-GAPS.md` for what the library does *not* do here.
+
 ## Cryptographic construction
 
 This package adds **no new cryptography** of its own. Every byte of signing,

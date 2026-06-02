@@ -17,6 +17,15 @@ namespace PostQuantum.AspNetCore;
 public static class PostQuantumJwtKeyRingExtensions
 {
     /// <summary>
+    /// Default cap applied to the typed key-ring <see cref="HttpClient"/>'s
+    /// <see cref="HttpClient.MaxResponseContentBufferSize"/>. A real key
+    /// directory is tens of keys × a few hundred bytes; 1 MB is roughly
+    /// three orders of magnitude of headroom and rejects bodies designed
+    /// to drive memory pressure.
+    /// </summary>
+    public const long DefaultMaxKeyDirectoryBytes = 1L * 1024 * 1024;
+
+    /// <summary>
     /// Registers an <see cref="HttpPostQuantumJwtKeyRing"/> backed by the
     /// supplied HTTPS endpoint and wires it onto
     /// <see cref="PostQuantumJwtBearerDefaults.AuthenticationScheme"/>.
@@ -24,13 +33,25 @@ public static class PostQuantumJwtKeyRingExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="endpoint">The fully-qualified key-directory URL. Must be HTTPS in production.</param>
     /// <param name="refreshInterval">How often the directory may be re-fetched. Defaults to 5 minutes.</param>
+    /// <param name="configureHttpClient">
+    /// Optional hook invoked against the <see cref="IHttpClientBuilder"/>
+    /// of the typed key-ring client. Use this to configure certificate
+    /// pinning, a hardened primary <see cref="HttpMessageHandler"/>, a
+    /// proxy, or any other per-client setting. The HTTPS key-directory
+    /// endpoint is the root of trust for token validation — see
+    /// <c>SECURITY.md</c> for the recommended pinning pattern.
+    /// </param>
     /// <returns>The same service collection.</returns>
     public static IServiceCollection AddPostQuantumJwtKeyRing(
         this IServiceCollection services,
         Uri endpoint,
-        TimeSpan? refreshInterval = null)
+        TimeSpan? refreshInterval = null,
+        Action<IHttpClientBuilder>? configureHttpClient = null)
         => services.AddPostQuantumJwtKeyRing(
-            PostQuantumJwtBearerDefaults.AuthenticationScheme, endpoint, refreshInterval);
+            PostQuantumJwtBearerDefaults.AuthenticationScheme,
+            endpoint,
+            refreshInterval,
+            configureHttpClient);
 
     /// <summary>
     /// Registers an <see cref="HttpPostQuantumJwtKeyRing"/> backed by the
@@ -43,18 +64,32 @@ public static class PostQuantumJwtKeyRingExtensions
     /// was called with.</param>
     /// <param name="endpoint">The fully-qualified key-directory URL. Must be HTTPS in production.</param>
     /// <param name="refreshInterval">How often the directory may be re-fetched. Defaults to 5 minutes.</param>
+    /// <param name="configureHttpClient">
+    /// Optional hook invoked against the <see cref="IHttpClientBuilder"/>
+    /// of the typed key-ring client. Use this to configure certificate
+    /// pinning, a hardened primary <see cref="HttpMessageHandler"/>, a
+    /// proxy, or any other per-client setting.
+    /// </param>
     /// <returns>The same service collection.</returns>
     public static IServiceCollection AddPostQuantumJwtKeyRing(
         this IServiceCollection services,
         string authenticationScheme,
         Uri endpoint,
-        TimeSpan? refreshInterval = null)
+        TimeSpan? refreshInterval = null,
+        Action<IHttpClientBuilder>? configureHttpClient = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrEmpty(authenticationScheme);
         ArgumentNullException.ThrowIfNull(endpoint);
 
-        services.AddHttpClient<HttpPostQuantumJwtKeyRing>();
+        var httpBuilder = services.AddHttpClient<HttpPostQuantumJwtKeyRing>();
+        // Bound the response size by default. A real key directory is
+        // tens of keys × a few hundred bytes; the cap rejects bodies
+        // designed to drive memory pressure. Callers with a genuinely
+        // larger directory can raise it inside configureHttpClient.
+        httpBuilder.ConfigureHttpClient(c => c.MaxResponseContentBufferSize = DefaultMaxKeyDirectoryBytes);
+        configureHttpClient?.Invoke(httpBuilder);
+
         services.AddSingleton<IPostQuantumJwtKeyRing>(sp =>
         {
             var http = sp.GetRequiredService<IHttpClientFactory>()

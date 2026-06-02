@@ -214,6 +214,132 @@ public sealed class HttpPostQuantumJwtKeyRingTests
         Assert.Equal("ML-DSA-65", PqJwtAlgorithms.MLDsa65);
     }
 
+    [PqcFact]
+    public void Resolve_UnknownKidFlood_SameKid_NegativeCacheShortCircuits()
+    {
+        // Finding 3: under sustained random-kid flooding the sync Resolve
+        // path must not enter the sync-over-async bridge or _refreshLock
+        // on every miss. After the first refresh-miss confirms the kid is
+        // absent, subsequent Resolve calls for the same kid should
+        // short-circuit via the negative cache — same call, same answer,
+        // no additional fetch.
+        var stub = new StubHttpMessageHandler("{ \"keys\": [] }");
+        using var http = new HttpClient(stub);
+        using var ring = new HttpPostQuantumJwtKeyRing(
+            http, new Uri("https://keys.test/keys"));
+
+        // First miss does a fetch (refresh-miss) and stamps the negative cache.
+        Assert.Null(ring.Resolve("ghost-kid"));
+        Assert.Equal(1, stub.CallCount);
+
+        // 200 subsequent misses for the same kid: short-circuit via negative
+        // cache. No additional HTTP calls; no _refreshLock contention.
+        for (var i = 0; i < 200; i++)
+        {
+            Assert.Null(ring.Resolve("ghost-kid"));
+        }
+        Assert.Equal(1, stub.CallCount);
+    }
+
+    [PqcFact]
+    public async Task Resolve_NegativeCache_BoundedSize_DoesNotGrowUnbounded()
+    {
+        // Finding 3: bound the memory footprint of the negative cache.
+        // Even when a flood of unique random kids each populates the cache,
+        // its size must stay at or below the documented cap (1024 entries).
+        var stub = new StubHttpMessageHandler("{ \"keys\": [] }");
+        using var http = new HttpClient(stub);
+        using var ring = new HttpPostQuantumJwtKeyRing(
+            http, new Uri("https://keys.test/keys"));
+
+        // Flood with N unique kids, N > cap. ResolveAsync drives
+        // RememberMissing on each refresh-miss; the throttle inside
+        // RefreshAsync short-circuits the actual fetch after the first
+        // one, but the negative-cache stamp still happens for every kid.
+        const int Flood = 4000;
+        for (var i = 0; i < Flood; i++)
+        {
+            Assert.Null(await ring.ResolveAsync($"random-{i:D6}"));
+        }
+
+        // After 4× the cap of unique kids, the bounded eviction must keep
+        // the cache at or below the documented maximum.
+        Assert.InRange(ring.DebugNegativeCacheCount, 0, 1024);
+    }
+
+    [PqcFact]
+    public async Task Resolve_KidBecomesValid_NotWronglyRejectedPastTtlWindow()
+    {
+        // Finding 3 — bound verification: a kid which becomes valid in
+        // the upstream directory between two misses must be resolvable
+        // once the 10s negative-cache TTL (= forced-refresh throttle
+        // window) elapses, and must NOT be wrongly rejected past that
+        // window. On the refresh-hit, the handler must also clear the
+        // stale negative entry so subsequent calls hit the cache cleanly.
+        using var signer = MLDsa.GenerateKey(MLDsaAlgorithm.MLDsa65);
+        var k1Bytes = Convert.ToBase64String(signer.ExportMLDsaPublicKey());
+
+        var emptyDirectory = "{ \"keys\": [] }";
+        var withK1 = "{ \"keys\": [" +
+            $"{{ \"kid\": \"late-kid\", \"alg\": \"ML-DSA-65\", \"key\": \"{k1Bytes}\" }}" +
+            "] }";
+
+        var stub = new ScriptedHandler(emptyDirectory, withK1);
+        using var http = new HttpClient(stub);
+        using var ring = new HttpPostQuantumJwtKeyRing(
+            http, new Uri("https://keys.test/keys"));
+
+        // Phase 1: kid is absent. Miss populates the negative cache.
+        Assert.Null(await ring.ResolveAsync("late-kid"));
+        Assert.Equal(1, ring.DebugNegativeCacheCount);
+
+        // Phase 2: a Resolve inside the 10s window short-circuits to null.
+        // (We assert on the sync path so the short-circuit, not just the
+        // throttle, is what produced the null.)
+        Assert.Null(ring.Resolve("late-kid"));
+        Assert.Equal(1, stub.CallCount); // still no additional fetch
+
+        // Phase 3: upstream now serves the kid. Advance the script and
+        // wait past the 10s window (matches both NegativeCacheTtl and
+        // the forced-refresh throttle).
+        stub.Advance();
+        await Task.Delay(TimeSpan.FromSeconds(11));
+
+        // Phase 4: kid is now resolvable. The negative-cache TTL has
+        // expired, the forced-refresh throttle has passed, the refresh
+        // fetches the new directory, the refresh-hit branch returns the
+        // key AND clears the stale negative entry. The bound on wrong
+        // rejection — 10s, equal to the pre-existing forced-refresh
+        // throttle window — holds.
+        var key = await ring.ResolveAsync("late-kid");
+        Assert.NotNull(key);
+        Assert.Equal(0, ring.DebugNegativeCacheCount); // refresh-hit cleared it
+    }
+
+    [PqcFact]
+    public async Task Fetch_OversizeBody_RejectedByMaxResponseBufferSize()
+    {
+        // Finding 2: a hostile or compromised key endpoint must not be
+        // able to drive memory pressure by returning a very large JSON
+        // body. The DI helper applies HttpClient.MaxResponseContentBufferSize
+        // = 1 MB by default; the manual constructor accepts an explicit
+        // maxResponseBytes parameter. Either way, an oversize body
+        // surfaces as HttpRequestException and fails closed.
+        // Generate a body larger than the cap. Content is junk; the size
+        // is what matters for this test.
+        var body = "{ \"keys\": [" + new string(' ', 4096) + "] }";
+        var stub = new StubHttpMessageHandler(body);
+        using var http = new HttpClient(stub);
+        using var ring = new HttpPostQuantumJwtKeyRing(
+            http,
+            new Uri("https://keys.test/keys"),
+            maxResponseBytes: 1024); // cap < body size → reject
+
+        // PreloadAsync uses throwOnFailure=true, so an oversize body
+        // surfaces directly to the caller rather than being swallowed.
+        await Assert.ThrowsAsync<HttpRequestException>(() => ring.PreloadAsync());
+    }
+
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         private readonly string _responseBody;
@@ -239,6 +365,7 @@ public sealed class HttpPostQuantumJwtKeyRingTests
     {
         private readonly string[] _responses;
         private int _index;
+        public int CallCount { get; private set; }
 
         public ScriptedHandler(params string[] responses)
         {
@@ -253,6 +380,7 @@ public sealed class HttpPostQuantumJwtKeyRingTests
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            CallCount++;
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(_responses[_index], Encoding.UTF8, "application/json"),

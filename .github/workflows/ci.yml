@@ -16,7 +16,7 @@ jobs:
     # strings is a trust signal we never want to send.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Check version is in sync across csproj/README/CHANGELOG
         run: bash scripts/check-version-sync.sh
 
@@ -24,7 +24,7 @@ jobs:
     # `dotnet format` is authoritative — fail the build on any drift.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -41,7 +41,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -105,7 +105,7 @@ jobs:
       run:
         shell: bash -el {0}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -182,7 +182,7 @@ jobs:
             rid: osx-arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -210,7 +210,7 @@ jobs:
       run:
         shell: bash -el {0}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -283,7 +283,7 @@ jobs:
     # metadata regressions long before a release tag is pushed.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 

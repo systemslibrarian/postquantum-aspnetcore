@@ -16,7 +16,7 @@ jobs:
     # strings is a trust signal we never want to send.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Check version is in sync across csproj/README/CHANGELOG
         run: bash scripts/check-version-sync.sh
 
@@ -24,7 +24,7 @@ jobs:
     # `dotnet format` is authoritative — fail the build on any drift.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -41,7 +41,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -105,7 +105,7 @@ jobs:
       run:
         shell: bash -el {0}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -113,7 +113,7 @@ jobs:
           global-json-file: global.json
 
       - name: Set up miniconda + OpenSSL 3.5
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           auto-update-conda: false
           activate-environment: pq
@@ -182,7 +182,7 @@ jobs:
             rid: osx-arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -210,7 +210,7 @@ jobs:
       run:
         shell: bash -el {0}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -218,7 +218,7 @@ jobs:
           global-json-file: global.json
 
       - name: Set up miniconda + OpenSSL 3.5
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           auto-update-conda: false
           activate-environment: pq
@@ -271,7 +271,7 @@ jobs:
 
       - name: Upload coverage artifact
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage-report/
@@ -283,7 +283,7 @@ jobs:
     # metadata regressions long before a release tag is pushed.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -299,7 +299,7 @@ jobs:
         run: dotnet pack src/PostQuantum.AspNetCore/PostQuantum.AspNetCore.csproj -c Release -o artifacts
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: nuget-package-${{ github.sha }}
           path: artifacts/*.*nupkg

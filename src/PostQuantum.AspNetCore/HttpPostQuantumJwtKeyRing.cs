@@ -50,8 +50,8 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
     // UtcTicks taken from _timeProvider.
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _negativeCache
         = new(StringComparer.Ordinal);
-    private const int MaxNegativeCacheEntries = 1024;
-    private static readonly TimeSpan NegativeCacheTtl = TimeSpan.FromSeconds(10);
+    private const int _maxNegativeCacheEntries = 1024;
+    private static readonly TimeSpan _negativeCacheTtl = TimeSpan.FromSeconds(10);
 
     /// <summary>Creates an HTTP-backed key ring.</summary>
     /// <param name="httpClient">An <see cref="HttpClient"/> (typed-client friendly).</param>
@@ -181,7 +181,7 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
         }
 
         var ageTicks = _timeProvider.GetUtcNow().UtcTicks - stampTicks;
-        if (ageTicks < NegativeCacheTtl.Ticks)
+        if (ageTicks < _negativeCacheTtl.Ticks)
         {
             return true;
         }
@@ -200,7 +200,7 @@ public sealed class HttpPostQuantumJwtKeyRing : IPostQuantumJwtKeyRing, IDisposa
         // Not LRU — entries naturally expire on lookup; the cap exists
         // only to prevent a flood of unique random kids from ballooning
         // memory. Correctness is unaffected by which entry we drop.
-        if (_negativeCache.Count >= MaxNegativeCacheEntries)
+        if (_negativeCache.Count >= _maxNegativeCacheEntries)
         {
             foreach (var kvp in _negativeCache)
             {

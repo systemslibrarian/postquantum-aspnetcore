@@ -35,7 +35,7 @@
     <EnablePackageValidation>true</EnablePackageValidation>
     <!-- Same baseline discipline as the main package: compare against the
          last published version on every pack. Bump at each release. -->
-    <PackageValidationBaselineVersion>1.0.0-preview.3</PackageValidationBaselineVersion>
+    <PackageValidationBaselineVersion>1.0.0</PackageValidationBaselineVersion>
   </PropertyGroup>
 
   <ItemGroup>

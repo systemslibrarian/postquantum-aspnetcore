@@ -44,11 +44,11 @@
     <!-- API-surface baseline check, ON by default from 1.0.0: every pack
          compares the public API against the last published version and fails
          on an accidental break. (The old 0.1.0-preview.1 baseline was never
-         published, so this used to be opt-in; 1.0.0-preview.3 is live and
-         resolvable.) Bump to the newest published version at each release.
-         Requires nuget.org access at pack time; override with
-         -p:PackageValidationBaselineVersion= only if packing fully offline. -->
-    <PackageValidationBaselineVersion>1.0.0-preview.3</PackageValidationBaselineVersion>
+         published, so this used to be opt-in and dormant.) Bump to the newest
+         published version at each release. Requires nuget.org access at pack
+         time; override with -p:PackageValidationBaselineVersion= only if
+         packing fully offline. -->
+    <PackageValidationBaselineVersion>1.0.0</PackageValidationBaselineVersion>
   </PropertyGroup>
 
   <ItemGroup>

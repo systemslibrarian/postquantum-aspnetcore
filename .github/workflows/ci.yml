@@ -72,24 +72,29 @@ jobs:
       # On Windows the runner has the native ML-KEM / ML-DSA primitives, so
       # every PqcFact test MUST run. If anything skipped, we are no longer
       # proving the cryptographic paths in CI — fail the job.
+      # The gate sums Skipped across EVERY per-project summary line, not just
+      # the last one — `tail -1` on a multi-project run can land on a project
+      # with no PQ tests and false-pass while the real suite skips (this
+      # exact failure hid a broken Linux PQ lane in the engine repo).
       - name: Require zero skipped tests on Windows (PQ paths must run)
         if: runner.os == 'Windows'
         shell: bash
         run: |
           set -euo pipefail
-          summary=$(grep -E '^(Passed!|Failed!)' test-output.log | tail -1)
-          echo "Test summary line: $summary"
-          if [[ -z "$summary" ]]; then
-            echo "::error::Could not locate the dotnet test summary line."
+          summaries=$(grep -E '^(Passed!|Failed!)' test-output.log || true)
+          if [[ -z "$summaries" ]]; then
+            echo "::error::Could not locate any dotnet test summary line."
             exit 1
           fi
-          skipped=$(echo "$summary" | grep -oE 'Skipped:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1)
-          if [[ -z "$skipped" ]]; then
-            echo "::error::Could not extract Skipped count from test output."
-            exit 1
-          fi
-          if [[ "$skipped" -ne 0 ]]; then
-            echo "::error::Windows CI lane is the PQ-required lane; $skipped test(s) skipped."
+          echo "Test summary lines:"
+          echo "$summaries"
+          total_skipped=0
+          while IFS= read -r line; do
+            s=$(echo "$line" | grep -oE 'Skipped:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1)
+            total_skipped=$((total_skipped + ${s:-0}))
+          done <<< "$summaries"
+          if [[ "$total_skipped" -ne 0 ]]; then
+            echo "::error::Windows CI lane is the PQ-required lane; $total_skipped test(s) skipped."
             echo "This usually means the ML-KEM/ML-DSA primitives weren't available to the runner."
             exit 1
           fi
@@ -121,7 +126,7 @@ jobs:
 
       - name: Install OpenSSL 3.5+ from conda-forge
         run: |
-          conda install -y -n pq -c conda-forge "openssl>=3.5"
+          conda install -y -n pq -c conda-forge "openssl>=3.5,<4"
           "$CONDA/envs/pq/bin/openssl" version
           echo "PQ_OPENSSL_LIB=$CONDA/envs/pq/lib" >> "$GITHUB_ENV"
 
@@ -162,22 +167,25 @@ jobs:
             dotnet test -c Release --no-build --logger "console;verbosity=minimal" \
             | tee test-output.log
 
+      # Sums Skipped across every per-project summary line — see the Windows
+      # gate above for why `tail -1` alone is unsafe.
       - name: Require zero skipped tests on Linux (PQ paths must run)
         run: |
           set -euo pipefail
-          summary=$(grep -E '^(Passed!|Failed!)' test-output.log | tail -1)
-          echo "Test summary line: $summary"
-          if [[ -z "$summary" ]]; then
-            echo "::error::Could not locate the dotnet test summary line."
+          summaries=$(grep -E '^(Passed!|Failed!)' test-output.log || true)
+          if [[ -z "$summaries" ]]; then
+            echo "::error::Could not locate any dotnet test summary line."
             exit 1
           fi
-          skipped=$(echo "$summary" | grep -oE 'Skipped:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1)
-          if [[ -z "$skipped" ]]; then
-            echo "::error::Could not extract Skipped count from test output."
-            exit 1
-          fi
-          if [[ "$skipped" -ne 0 ]]; then
-            echo "::error::Linux PQ-required lane: $skipped test(s) skipped — OpenSSL 3.5+ should make ML-KEM/ML-DSA available."
+          echo "Test summary lines:"
+          echo "$summaries"
+          total_skipped=0
+          while IFS= read -r line; do
+            s=$(echo "$line" | grep -oE 'Skipped:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1)
+            total_skipped=$((total_skipped + ${s:-0}))
+          done <<< "$summaries"
+          if [[ "$total_skipped" -ne 0 ]]; then
+            echo "::error::Linux PQ-required lane: $total_skipped test(s) skipped — OpenSSL 3.5+ (below 4.x, see the conda pin) should make ML-KEM/ML-DSA available."
             exit 1
           fi
           echo "PQ-required check passed on Linux: 0 skipped tests."
@@ -250,7 +258,7 @@ jobs:
 
       - name: Install OpenSSL 3.5+ from conda-forge
         run: |
-          conda install -y -n pq -c conda-forge "openssl>=3.5"
+          conda install -y -n pq -c conda-forge "openssl>=3.5,<4"
           echo "LD_LIBRARY_PATH=$CONDA/envs/pq/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
       - name: Install reportgenerator

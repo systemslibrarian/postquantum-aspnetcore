@@ -3,12 +3,66 @@
 All notable changes to `PostQuantum.AspNetCore` are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
-once it reaches `1.0.0`. Preview releases (`0.x`) may break the API between
-versions.
+from the stable `1.0.0` onward. Pre-`1.0.0` releases (`0.x` and
+`1.0.0-preview.*`) could break the API between versions.
 
 ## [Unreleased]
 
 _No changes yet._
+
+## [1.0.0] — 2026-07-05
+
+**First stable release**, in lockstep with the companion
+`PostQuantum.AspNetCore.RedisReplayCache 1.0.0`. SemVer applies from here:
+PATCH for fixes, MINOR for additive surface, MAJOR for any break.
+
+The public API surface is **unchanged from `1.0.0-preview.3`** — now
+enforced mechanically: package baseline validation compares every pack
+against the last published version (see below). No behaviour change on any
+validation path.
+
+**Graduating from preview does not add an audit.** The underlying
+cryptographic construction remains **not independently audited**. Through
+the preview series that was framed as a gate to 1.0; at `1.0.0` it is
+reframed as a **permanent, documented limitation** — matching the engine's
+own `1.0.0` (2026-06-30) — because an unfunded project is unlikely to secure
+a formal review and perpetual preview served no one. `README.md`,
+`SECURITY.md`, and `KNOWN-GAPS.md` carry the new framing: production-quality
+for controlled issuer/verifier systems; adopt only where you own both sides
+and accept the documented risk.
+
+### Changed
+
+- **`PostQuantum.Jwt` engine dependency: `1.0.0-preview.1` → `1.0.0`
+  (stable).** The engine GA'd on 2026-06-30 with an API and wire format
+  unchanged from its preview line; no source change was needed here.
+- **Predecessor retirement recorded.** `PostQuantum.Jwt.AspNetCore` (the
+  engine repo's original companion) is frozen at its 1.0.0, deprecated and
+  unlisted on nuget.org (2026-07-05). This package is its successor; the
+  README's positioning note now says so instead of describing it as a
+  live lower-level alternative. Tokens minted under either validate in
+  the other.
+- **Release workflow publishes via NuGet Trusted Publishing (OIDC).** The
+  publish job mints a short-lived nuget.org key from the GitHub Actions
+  OIDC token via `NuGet/login@v1` — the long-lived `NUGET_API_KEY` secret
+  is gone. Publishing remains double-gated: explicit `workflow_dispatch`
+  with `publish: true` plus the `nuget-publish` environment's required
+  reviewers. A tag push still only packs and attests, never publishes.
+- **CI pack now covers both packages.** Earlier releases packed only
+  `PostQuantum.AspNetCore` in CI (the Redis companion shipped via the
+  maintainer's manual CLI path); the pack job now packs, attests, and
+  pushes both, main package first (the companion's `.nuspec` depends on
+  it). The version step fails if the two csproj versions ever drift.
+- **API baseline validation is on by default.**
+  `PackageValidationBaselineVersion` is set to the last published version
+  (`1.0.0-preview.3`) instead of being gated behind
+  `-p:EnableBaselineValidation=true` against a `0.1.0-preview.1` baseline
+  that was never published. An accidental public-API break now fails the
+  pack, not a code review.
+- **`PostQuantum.AspNetCore.RedisReplayCache` metadata corrected.** Its
+  release notes were stale (still describing `0.7.0-preview.1`) and its
+  description said "not for production use"; both now carry the 1.0
+  framing and the package gains the same baseline-validation guard.
 
 ## [1.0.0-preview.3] — 2026-06-01
 
@@ -761,7 +815,8 @@ release cadence.
 
 ---
 
-[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v1.0.0-preview.3...HEAD
+[Unreleased]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v1.0.0-preview.3...v1.0.0
 [1.0.0-preview.3]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v1.0.0-preview.2...v1.0.0-preview.3
 [1.0.0-preview.2]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v1.0.0-preview.1...v1.0.0-preview.2
 [1.0.0-preview.1]: https://github.com/systemslibrarian/postquantum-aspnetcore/compare/v0.9.1-preview.1...v1.0.0-preview.1

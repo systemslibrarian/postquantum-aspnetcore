@@ -3,14 +3,25 @@ name: Release
 # Builds, packs, and attests every `v*` tag push (transparency signals —
 # SBOM, SHA256SUMS, build-provenance attestations — get published as
 # workflow artifacts). The actual nuget.org PUSH is gated behind a
-# manual `workflow_dispatch` with `publish: true`, because the
-# maintainer publishes from the command line. A tag push alone will
+# manual `workflow_dispatch` with `publish: true`. A tag push alone will
 # NEVER push to nuget.org — only the explicit manual dispatch will.
 #
-# If you want to publish via CI:
+# Authentication is NuGet Trusted Publishing (OIDC): the publish job
+# exchanges the GitHub Actions OIDC token for a short-lived nuget.org API
+# key via the NuGet/login action — there is NO long-lived NUGET_API_KEY
+# secret. A matching Trusted Publishing policy must exist on nuget.org
+# (account → Trusted Publishing) bound to:
+#   repository owner = systemslibrarian
+#   repository       = postquantum-aspnetcore
+#   workflow file    = release.yml
+#   environment      = nuget-publish   (optional, recommended)
+# The nuget.org account username that owns the policy is supplied via the
+# `NUGET_USER` repository variable (Settings → Secrets and variables →
+# Actions → Variables). It is not a secret.
+#
+# To publish via CI:
 #   Actions → Release → Run workflow → check "Push packages to nuget.org"
-# That run requires the `nuget-publish` GitHub Environment + the
-# `NUGET_API_KEY` secret + an approver.
+# That run requires the `nuget-publish` GitHub Environment + an approver.
 
 on:
   push:
@@ -48,6 +59,12 @@ jobs:
         run: |
           set -euo pipefail
           csproj_version=$(grep -oP '(?<=<Version>)[^<]+' src/PostQuantum.AspNetCore/PostQuantum.AspNetCore.csproj)
+          # The Redis companion ships in lockstep — hold it to that.
+          redis_version=$(grep -oP '(?<=<Version>)[^<]+' src/PostQuantum.AspNetCore.RedisReplayCache/PostQuantum.AspNetCore.RedisReplayCache.csproj)
+          if [ "$redis_version" != "$csproj_version" ]; then
+            echo "::error::RedisReplayCache version ($redis_version) does not match PostQuantum.AspNetCore ($csproj_version) — they release in lockstep."
+            exit 1
+          fi
           # When triggered by a tag push, verify the tag matches the csproj.
           # When triggered by workflow_dispatch, there's no tag — accept the
           # csproj version as the source of truth.
@@ -69,8 +86,14 @@ jobs:
       - name: Test (Release)
         run: dotnet test -c Release --no-build
 
-      - name: Pack
+      # Both packages ship in lockstep. Earlier releases packed only the main
+      # package here (the Redis companion went out via the maintainer's manual
+      # CLI path); from 1.0.0 the CI pack covers both.
+      - name: Pack — PostQuantum.AspNetCore
         run: dotnet pack src/PostQuantum.AspNetCore/PostQuantum.AspNetCore.csproj -c Release --no-build -o artifacts
+
+      - name: Pack — RedisReplayCache companion
+        run: dotnet pack src/PostQuantum.AspNetCore.RedisReplayCache/PostQuantum.AspNetCore.RedisReplayCache.csproj -c Release --no-build -o artifacts
 
       - name: Generate top-level CycloneDX SBOM (in addition to the per-nupkg one)
         run: |
@@ -115,31 +138,42 @@ jobs:
   publish:
     needs: pack
     # NEVER runs on tag push. Requires an explicit manual workflow_dispatch
-    # with `publish: true`. The maintainer publishes from the command line;
-    # this job exists as a documented escape hatch and is gated so it can't
-    # fire by accident.
+    # with `publish: true`, plus the `nuget-publish` environment's required
+    # reviewers — gated twice so it can't fire by accident.
     if: github.event_name == 'workflow_dispatch' && inputs.publish == true
     environment: nuget-publish
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write       # required: mint the GitHub OIDC token for NuGet/login
     env:
-      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
       NUGET_SIGNING_CERT: ${{ secrets.NUGET_SIGNING_CERT }}
       NUGET_SIGNING_CERT_PASSWORD: ${{ secrets.NUGET_SIGNING_CERT_PASSWORD }}
     steps:
+      # Checkout is needed so global.json exists for setup-dotnet below —
+      # this job otherwise only consumes the pack job's artifacts.
+      - uses: actions/checkout@v5
+
       - name: Download package artifacts
         uses: actions/download-artifact@v5
         with:
           name: nuget-package
           path: artifacts
 
-      - name: Verify an API key is configured
-        run: |
-          if [ -z "${NUGET_API_KEY}" ]; then
-            echo "::error::NUGET_API_KEY is not set on the 'nuget-publish' environment."
-            exit 1
-          fi
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      # Trusted Publishing: exchange the GitHub OIDC token for a short-lived
+      # nuget.org API key. Requires `id-token: write` (above) and a matching
+      # Trusted Publishing policy on nuget.org (see the header comment). The
+      # minted key is exposed to later steps as steps.nuget-login.outputs.NUGET_API_KEY.
+      - name: NuGet trusted-publishing login (OIDC)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
 
       # Optional: author code-sign the .nupkg files when a code-signing cert
       # is provided. If the secret is absent we log it and continue (with the
@@ -173,9 +207,27 @@ jobs:
       # attestations (in the pack job above) are an independent transparency
       # signal — anyone can verify with `gh attestation verify <file>
       # --repo systemslibrarian/postquantum-aspnetcore`.
-      - name: Push to NuGet
+      #
+      # Two explicit sequential pushes, not a glob: RedisReplayCache's .nuspec
+      # lists PostQuantum.AspNetCore as a runtime dependency, so the main
+      # package goes first to narrow the window where a consumer resolves the
+      # companion before its dependency has indexed. `dotnet nuget push`
+      # uploads each .nupkg's adjacent .snupkg automatically; `--skip-duplicate`
+      # keeps re-runs idempotent.
+      - name: Push PostQuantum.AspNetCore first
+        env:
+          PKG_VERSION: ${{ needs.pack.outputs.package_version }}
         run: >
-          dotnet nuget push "artifacts/*.nupkg"
-          --api-key "$NUGET_API_KEY"
+          dotnet nuget push "artifacts/PostQuantum.AspNetCore.${PKG_VERSION}.nupkg"
+          --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
+
+      - name: Push RedisReplayCache companion (depends on the main package)
+        env:
+          PKG_VERSION: ${{ needs.pack.outputs.package_version }}
+        run: >
+          dotnet nuget push "artifacts/PostQuantum.AspNetCore.RedisReplayCache.${PKG_VERSION}.nupkg"
+          --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate

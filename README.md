@@ -36,20 +36,27 @@ construction. Small surface. Honest about its limits.
 > **equivalent** that knows the right things about ML-DSA-65 — not a
 > reinvention of the crypto stack underneath.
 
-> **Status — `1.0.0-preview.3`.** Preview software. Not for production use.
-> The API may change before 1.0, and the underlying cryptographic construction
-> has not been independently audited. Read [`KNOWN-GAPS.md`](KNOWN-GAPS.md)
-> before depending on this for anything that matters.
+> **Status — `1.0.0`, stable.** Production-quality integration for
+> **controlled issuer/verifier systems** — environments where the same team
+> owns both token issuing and token validation. The public API is stable
+> under SemVer from `1.0.0` onward. "Production-quality" describes the
+> hardened, fail-closed integration — **not** an audit sign-off: the
+> underlying cryptographic construction has **not** been independently
+> audited, and at 1.0 that is a **permanent, documented limitation**, not a
+> pending gate (matching the engine's own `1.0.0`). Read
+> [`KNOWN-GAPS.md`](KNOWN-GAPS.md) before depending on this for anything
+> that matters.
 
-> **Most ASP.NET Core apps should use this package.** It is the high-level,
-> one-line wire-up for post-quantum JWT bearer auth — event hooks, hosted-
-> service warmup, `Meter` + `ActivitySource` observability, distributed
+> **This is the ASP.NET Core package.** It is the high-level, one-line
+> wire-up for post-quantum JWT bearer auth — event hooks, hosted-service
+> warmup, `Meter` + `ActivitySource` observability, distributed
 > replay-cache wiring, and a DI helper that doesn't force a
-> `BuildServiceProvider()` call. The engine repository also ships a lower-
-> level [`PostQuantum.Jwt.AspNetCore`](https://github.com/systemslibrarian/postquantum-jwt/tree/main/src/PostQuantum.Jwt.AspNetCore)
-> package; that one is the minimal "prove the engine works in ASP.NET Core"
-> surface and lacks those additions. Pick it only if you are deliberately
-> building your own application-layer wiring on top of the engine.
+> `BuildServiceProvider()` call. Its predecessor,
+> [`PostQuantum.Jwt.AspNetCore`](https://github.com/systemslibrarian/postquantum-jwt/tree/main/src/PostQuantum.Jwt.AspNetCore),
+> is **retired** — frozen at its 1.0.0, deprecated and unlisted on
+> nuget.org. Tokens minted under either package validate in the other
+> (same engine); existing consumers migrate via the
+> [migration guide](docs/MIGRATION.md).
 
 > **Operator note: the HTTP key directory is the root of trust for token
 > validation.** Read [`SECURITY.md#trust-root-the-http-key-directory`](SECURITY.md#trust-root-the-http-key-directory)
@@ -78,9 +85,9 @@ construction. Small surface. Honest about its limits.
   Insights.
 - **AOT-compatible** — `IsAotCompatible=true`, verified end-to-end in
   CI on Linux, Windows, and macOS.
-- **Honest about limits** — preview status, non-IANA algorithm
-  identifiers, no independent audit, every gap tracked in
-  [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
+- **Honest about limits** — non-IANA algorithm identifiers, no
+  independent audit (a permanent, documented limitation), every gap
+  tracked in [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
 
 > **In a hurry?** Jump straight to:
 >
@@ -188,13 +195,13 @@ nothing else.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.AspNetCore --version 1.0.0-preview.3
+dotnet add package PostQuantum.AspNetCore --version 1.0.0
 ```
 
 Or in a `.csproj`:
 
 ```xml
-<PackageReference Include="PostQuantum.AspNetCore" Version="1.0.0-preview.3" />
+<PackageReference Include="PostQuantum.AspNetCore" Version="1.0.0" />
 ```
 
 **Runtime requirement:** the native ML-KEM / ML-DSA primitives need an
@@ -392,7 +399,7 @@ companion package ships a Redis implementation that's a one-line
 wireup:
 
 ```bash
-dotnet add package PostQuantum.AspNetCore.RedisReplayCache --version 1.0.0-preview.3
+dotnet add package PostQuantum.AspNetCore.RedisReplayCache --version 1.0.0
 ```
 
 ```csharp
@@ -620,7 +627,7 @@ for one problem: hybrid post-quantum JWT authentication.
 | **Algorithm agility**  | Yes — and historically the source of `alg: none`, RS/HS confusion, and downgrade attacks. | **No, by design.** The validator does not trust the token's `alg` to pick a path; it accepts exactly one. |
 | **Standards interop**  | Fully IANA-registered identifiers; tokens validate in every JWT library. | Identifiers (`ML-DSA-65`, `X-Wing`) are not IANA-registered. Tokens **will not** validate in generic JWT tooling. |
 | **JWKS**               | First-class.                                    | `IPostQuantumJwtKeyRing` + HTTP-backed implementation — JWKS-equivalent over a deliberately trivial wire format. |
-| **External audit**     | Yes — widely deployed and reviewed.             | **No.** Preview, not audited.                              |
+| **External audit**     | Yes — widely deployed and reviewed.             | **No** — a permanent, documented limitation.               |
 | **Dependencies**       | `Microsoft.IdentityModel.*` family.             | `PostQuantum.Jwt` + the `Microsoft.AspNetCore.App` framework reference. |
 | **Target framework**   | net8 / net9 / net10.                            | `net10.0` only (matches the engine).                       |
 
@@ -712,7 +719,7 @@ Everything downstream of those lines — `[Authorize]`,
 | Algorithm agility        | Yes (and historically a source of CVEs).        | **No, by design.** Token's `alg` doesn't pick a code path. |
 | Replay protection        | Not built-in.                                   | Built-in via `IPqJwtReplayCache` + Redis companion (opt-in). |
 | Standards interop        | Tokens validate in any JWT library.             | Tokens are non-interoperable until IANA registers `ML-DSA-65`. |
-| Production maturity      | Yes — decade-hardened.                          | **Preview** — not audited, not for production.             |
+| Production maturity      | Yes — decade-hardened.                          | Production-quality for controlled issuer/verifier systems; **not audited**. |
 
 ### Run both during migration
 
@@ -790,7 +797,8 @@ depending on this for anything that matters.**
 - **Non-standard identifiers.** `alg`/`enc` values (`ML-DSA-65`,
   `X-Wing`) are not IANA-registered. Tokens are intentionally not
   interoperable with generic JWT tooling.
-- **Preview.** Treat the API and wire format as unstable until 1.0.
+- **Stable under SemVer from `1.0.0`.** The public API and the engine's v1
+  wire format change only with a MAJOR version.
 - **⚠️ Replay defence is opt-in.** **Without a configured
   `IPqJwtReplayCache`, captured tokens are reusable until they expire.**
   For multi-instance production, use

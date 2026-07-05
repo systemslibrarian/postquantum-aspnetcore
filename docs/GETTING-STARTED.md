@@ -171,9 +171,9 @@ standard ASP.NET Core authentication pipeline.
   protection at scale, transport security, observability, supply-chain
   verification.
 - **Read [`SECURITY.md`](../SECURITY.md) and [`KNOWN-GAPS.md`](../KNOWN-GAPS.md)**
-  end-to-end. The library is **preview software** and the underlying
-  cryptography has not been independently audited; both documents
-  state honestly what that means.
+  end-to-end. The underlying cryptography has **not** been independently
+  audited — a permanent, documented limitation, not a pending item;
+  both documents state honestly what that means.
 - **Read the [`FAQ.md`](FAQ.md)** for answers to "should I use this in
   production?", "what about Auth0/IdentityServer?", "how big are
   tokens really?", and other common questions.

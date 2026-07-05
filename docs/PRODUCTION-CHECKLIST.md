@@ -1,9 +1,11 @@
 # Production checklist
 
 Before you put `PostQuantum.AspNetCore` on a path that real users hit,
-walk this list. **The library is preview software** — none of this turns
-that into "production ready," but skipping any of these items is a
-near-guaranteed incident waiting to happen.
+walk this list. The library is production-quality for **controlled
+issuer/verifier systems**, but it is **not independently audited** —
+this list is what turns "the library is solid" into "our deployment is
+solid," and skipping any of these items is a near-guaranteed incident
+waiting to happen.
 
 ## Crypto & key material
 
@@ -76,11 +78,12 @@ near-guaranteed incident waiting to happen.
 - [ ] You have read [`SECURITY.md`](../SECURITY.md) and [`KNOWN-GAPS.md`](../KNOWN-GAPS.md)
       end-to-end.
 - [ ] You accept that the cryptographic construction has **not been
-      independently audited**.
+      independently audited** — a permanent, documented limitation, with
+      no audit scheduled.
 - [ ] You accept that the wire format is **not IANA-registered** and
       tokens will not validate in generic JWT tooling.
-- [ ] You understand this is **preview software** and the API or wire
-      format may change before `1.0`.
+- [ ] You understand the SemVer commitment: the public API and the
+      engine's v1 wire format change only with a MAJOR version.
 
 ## Supply chain
 
@@ -93,8 +96,8 @@ near-guaranteed incident waiting to happen.
 
 If everything above is checked and your incident response plan covers the
 "key endpoint goes down" and "ML-DSA support disappears from the runtime"
-failure modes, you're as ready as preview software allows. Until 1.0,
-keep a back-out path.
+failure modes, you're as ready as an unaudited construction allows. Keep a
+back-out path regardless — that is good hygiene for any auth change.
 
 ---
 

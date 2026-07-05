@@ -1,8 +1,9 @@
 # Contributing
 
-Thanks for taking a look. `PostQuantum.AspNetCore` is preview software
-that handles authentication — the bar for changes is correspondingly
-high. This document is the short version of "how to land a PR that ships."
+Thanks for taking a look. `PostQuantum.AspNetCore` is stable (SemVer
+from `1.0.0`) software that handles authentication — the bar for changes
+is correspondingly high. This document is the short version of "how to
+land a PR that ships."
 
 ## Before you start
 

@@ -1,19 +1,17 @@
 # API stability
 
-`PostQuantum.AspNetCore` is **preview software** (`0.x.y-preview.z`).
-This document spells out exactly what that promises and what it doesn't,
-so you can decide whether to depend on a specific surface before `1.0`.
+`PostQuantum.AspNetCore` is **stable** (`1.0.0`): the public surface is
+frozen under SemVer, and the "1.0 commitment" section below is now in
+force, not a promise about the future. This document spells out exactly
+what that covers and what it doesn't.
 
-## During the `0.x` preview
+## The stable surface
 
-**The public API may change between any two `0.x` releases.** Renames,
-removed members, changed signatures, and altered defaults are all in
-scope. We try to minimise churn — most v0.x → v0.x bumps are additive —
-but the only stability guarantee during preview is that *each release
-ships clean*: zero compiler warnings, all tests green, format-clean,
-SBOM and provenance attestation attached.
-
-What "minimising churn" means in practice:
+Every release ships clean — zero compiler warnings, all tests green,
+format-clean, SBOM and provenance attestation attached — and from
+`1.0.0` an accidental public-API break fails the pack itself
+(`PackageValidationBaselineVersion` compares against the last published
+version). The anchors of the surface:
 
 - **`Add…` extension methods (`AddPostQuantumJwtBearer`, `AddPostQuantumJwtKeyRing*`)
   are stable in shape.** A new overload may appear; existing ones won't
@@ -44,22 +42,21 @@ What's *not* guaranteed:
 ## How to depend
 
 If your consuming code touches anything outside the "stable in shape"
-list above and you need a stronger commitment, pin to an **exact
-version** rather than a range:
+list above and you need the strongest commitment, pin to an **exact
+version**:
 
 ```xml
 <PackageReference Include="PostQuantum.AspNetCore"
-                  Version="[0.4.0-preview.1]" />
+                  Version="[1.0.0]" />
 ```
 
-If you can tolerate additive changes, pin to a minor range:
+If you can tolerate additive changes (the normal case), pin to the
+major line:
 
 ```xml
 <PackageReference Include="PostQuantum.AspNetCore"
-                  Version="0.4.*-*" />
+                  Version="1.*" />
 ```
-
-(The wildcard `*-*` is necessary to match preview suffixes.)
 
 ## What counts as a breaking change
 
@@ -79,10 +76,9 @@ new event hooks, new options-class properties with defaults — not
 breaking. Source-generated logger messages and log levels — not
 breaking.
 
-## The `1.0` commitment
+## The `1.0` commitment (in force from `1.0.0`)
 
-When `PostQuantum.AspNetCore` reaches `1.0.0`, the public surface
-freezes. From that point on:
+At `1.0.0` the public surface froze. From that point on:
 
 - Patch (`1.0.x`) releases ship **only** bug fixes and security
   updates. No new APIs, no new defaults, no behavioural changes
@@ -98,26 +94,42 @@ We also commit, at 1.0, to maintaining the previous major version for
 **at least 12 months** with security updates after a new major ships,
 so consumers have time to migrate.
 
-## What blocks `1.0`
+## How the `1.0` gates were resolved
 
-In dependency order:
+Earlier revisions of this document listed four blockers to `1.0`. For
+the record — because honesty about *how* a gate was cleared matters as
+much as clearing it — here is what actually happened to each:
 
-1. **External cryptographic audit of `PostQuantum.Jwt` (the engine).**
-   The wire format and the validator are upstream. Until an auditor has
-   reviewed them, neither this package nor any consumer of it should
-   be in production.
-2. **IANA registration of the `ML-DSA-65` / `X-Wing` algorithm
-   identifiers** — or, alternatively, a written acceptance that the
-   library is non-interoperable by design and that's fine.
-3. **A production deployment running at non-trivial scale** with
-   metrics and tracing wired up, surfacing real-world failure modes
-   we haven't seen in unit tests yet.
-4. **At least one external consumer migration** validating that
-   `docs/MIGRATION.md` is correct end-to-end.
+1. **External cryptographic audit of `PostQuantum.Jwt` (the engine)** —
+   **deliberately waived, not satisfied.** The engine shipped its own
+   `1.0.0` (2026-06-30) reframing the missing audit as a **permanent,
+   documented limitation**: an unfunded project is unlikely to secure a
+   formal review, and perpetual preview served no one. This package
+   inherits that decision verbatim. No third party has reviewed either
+   codebase, and none is scheduled — adopt only in controlled
+   issuer/verifier systems where you accept that documented risk.
+2. **IANA registration of `ML-DSA-65` / `X-Wing`** — resolved via the
+   alternative the gate itself offered: **written acceptance that the
+   library is non-interoperable by design.** That acceptance is stated
+   in the README, `SECURITY.md`, and the production checklist. If IANA
+   registration lands upstream someday, adopting the registered
+   identifiers would be a MAJOR (wire-format) change.
+3. **A production deployment at non-trivial scale** — **waived.** The
+   preview line produced no such deployment, and holding a completed
+   API hostage to a chicken-and-egg gate (nobody deploys previews of
+   auth libraries; the library can't leave preview without a
+   deployment) helped no one. The offer stands: if you want to be that
+   deployment, get in touch — the maintainer will walk through it with
+   you.
+4. **At least one external consumer migration validating
+   `docs/MIGRATION.md`** — **partially satisfied, honestly labelled.**
+   The migration path was exercised end-to-end by the maintainer's own
+   template migration in the engine repository (scaffold → build →
+   issue → validate → tamper-reject against the published packages),
+   not yet by an independent external consumer.
 
-If you're evaluating this library and you'd like to be the production
-deployment in point 3, please get in touch — the maintainer is interested
-in walking through it carefully.
+The version number is a SemVer commitment about the API surface. It is
+not, and was never going to be, a substitute for the audit.
 
 ---
 

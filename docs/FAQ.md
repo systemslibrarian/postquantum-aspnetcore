@@ -2,14 +2,20 @@
 
 ## Should I use this in production?
 
-**No, not yet.** This is preview software (`0.x.y-preview.z`) and the
-underlying cryptographic construction (in `PostQuantum.Jwt`) has not
-been independently audited. Use it for experimentation, prototyping,
-and getting your operational story ready — but for anything user-facing
-at scale, wait for `1.0` and a published audit.
+**In a controlled issuer/verifier system — yes, with eyes open.** From
+`1.0.0` the library is production-quality and stable under SemVer, and
+it is appropriate where the same team owns both token issuing and token
+validation. The load-bearing caveat: the underlying cryptographic
+construction (in `PostQuantum.Jwt`) has **not** been independently
+audited, and at 1.0 that is a **permanent, documented limitation** — no
+audit is scheduled, and waiting for one is no longer the plan (see
+[`SECURITY.md`](../SECURITY.md)). If your deployment needs
+standards-interoperable tokens, anonymous relying parties, or a
+third-party audit sign-off, use standard `JwtBearer` instead. Walk
+[`PRODUCTION-CHECKLIST.md`](PRODUCTION-CHECKLIST.md) before shipping.
 
-See [`API-STABILITY.md`](API-STABILITY.md) for the full list of what
-blocks `1.0`.
+See [`API-STABILITY.md`](API-STABILITY.md) for the SemVer commitment and
+how the `1.0` gates were resolved.
 
 ## Is this faster or slower than `Microsoft.AspNetCore.Authentication.JwtBearer`?
 

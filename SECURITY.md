@@ -1,18 +1,34 @@
 # Security Policy
 
-PostQuantum.AspNetCore is **preview software** (`0.x.y-preview.z`). It is not
-yet suitable for production use and has not been independently audited. This
-document states the security model honestly so you can make an informed
-decision before relying on it.
+PostQuantum.AspNetCore is a **production-quality library** (`1.0.0`, stable)
+for **controlled issuer/verifier systems** — environments where the same team
+owns both token issuing and token validation. "Production-quality" describes
+the hardened, fail-closed integration (strict validation, replay and
+key-rotation support, no insecure fallback), **not** an audit sign-off: the
+underlying cryptographic construction has **not** been independently audited,
+and this is **not** a drop-in replacement for OAuth/OIDC/JWT middleware. The
+public API is stable under SemVer from `1.0.0` onward.
+
+**The lack of an independent cryptographic audit is a permanent, documented
+limitation, not a temporary gate.** Through the preview series an external
+audit was framed as the blocker to `1.0`; at `1.0.0` that gate was removed
+deliberately — matching the engine library's own `1.0.0` — because an
+unfunded project is unlikely to secure a formal review, and perpetual
+`preview` served no one. No third party has reviewed the design or
+implementation, and none is scheduled. Adopt this only where you control
+both issuer and verifier and accept that risk with eyes open. This document
+states the security model honestly so you can make an informed decision
+before relying on it.
 
 ## Supported versions
 
-| Version             | Supported          |
-|---------------------|--------------------|
-| `0.1.0-preview.1`+  | ✅ (latest preview) |
-| anything older      | ❌                 |
+| Version             | Supported                    |
+|---------------------|------------------------------|
+| `1.0.x`             | ✅ (current stable line)     |
+| `1.0.0-preview.*`   | ❌ (superseded by `1.0.0`)   |
+| `0.x.y-preview.z`   | ❌ (superseded)              |
 
-During the `0.x` series only the most recent preview receives fixes.
+Only the current stable line receives fixes.
 
 ## Reporting a vulnerability
 
@@ -25,8 +41,7 @@ an exploitable flaw.
 
 Please include a description, affected version, and a reproduction if
 possible. We aim to acknowledge within **5 business days**. As an unfunded
-preview project, timelines are best-effort and stated honestly rather than
-promised.
+project, timelines are best-effort and stated honestly rather than promised.
 
 ## Threat model
 
@@ -169,13 +184,17 @@ serializer entirely.
 
 ## Honesty statement
 
-This is preview cryptographic-adjacent software written in the open. The
-cryptography itself is delegated to `PostQuantum.Jwt`, which is also preview
-and not externally audited — see its
+This is cryptographic-adjacent software written in the open. The
+cryptography itself is delegated to `PostQuantum.Jwt` (stable `1.0.0`),
+which has **not** been externally audited and has no review scheduled — at
+`1.0.0` that is a permanent, documented limitation rather than a pending
+gate; see its
 [`KNOWN-GAPS.md`](https://github.com/systemslibrarian/postquantum-jwt/blob/main/KNOWN-GAPS.md).
 Known limitations specific to this package are tracked transparently in
-[`KNOWN-GAPS.md`](KNOWN-GAPS.md). Until a 1.0 release and an external review,
-treat both packages as suitable for experimentation only.
+[`KNOWN-GAPS.md`](KNOWN-GAPS.md). Treat the absence of an independent audit
+as the load-bearing caveat: both packages are appropriate for controlled
+issuer/verifier systems whose operators accept that documented risk — not
+for anonymous-relying-party or standards-interop deployments.
 
 ---
 

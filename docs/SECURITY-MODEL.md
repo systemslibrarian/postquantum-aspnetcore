@@ -301,15 +301,15 @@ solve a different problem.
 | Algorithm agility     | Yes — historically the source of `alg: none`, RS/HS confusion.    | **No, by design.** Token's `alg` doesn't pick a code path.     |
 | Standards interop     | Full IANA-registered identifiers.                                 | Identifiers are not IANA-registered yet — non-interoperable.   |
 | OAuth/OIDC integration | First-class.                                                     | None. You issue your own PQ tokens.                            |
-| External audit        | Yes — decade-hardened, widely deployed.                           | **No.** Preview, not audited.                                  |
-| Production readiness  | Yes.                                                              | **Preview only.**                                              |
+| External audit        | Yes — decade-hardened, widely deployed.                           | **No** — a permanent, documented limitation.                   |
+| Production readiness  | Yes.                                                              | Controlled issuer/verifier systems only.                       |
 
 **Use standard `JwtBearer`** for every existing JWT scenario where
 classical algorithms are acceptable.
 
 **Use `PostQuantum.AspNetCore`** specifically when you control both
 the issuer and the verifier, you want post-quantum tokens *now*, and
-you accept that this is preview software.
+you accept the documented absence of an independent audit.
 
 The two schemes coexist cleanly — register both, route specific
 endpoints to specific schemes. See

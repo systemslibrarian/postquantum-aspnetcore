@@ -17,17 +17,17 @@
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <PackageId>PostQuantum.AspNetCore</PackageId>
-    <Version>1.0.0-preview.3</Version>
+    <Version>1.0.0</Version>
     <Title>PostQuantum.AspNetCore — post-quantum JWT authentication for ASP.NET Core</Title>
     <Authors>Paul Clark</Authors>
-    <Description>The high-level ASP.NET Core integration for post-quantum JWT authentication. Add one line — AddPostQuantumJwtBearer() — and hybrid ML-DSA-65 + X-Wing tokens authenticate through the standard ASP.NET Core pipeline exactly the way AddJwtBearer always has: same AuthenticationBuilder, same [Authorize], same ClaimsPrincipal. Fail-closed by construction, AOT-compatible, observable via System.Diagnostics (Metrics + ActivitySource). This is the application-layer wiring (handler, options, four event hooks, JWKS-equivalent key ring, hosted-service warmup) — NOT a cryptography library. The actual ML-DSA / X-Wing / AES-GCM work happens in PostQuantum.Jwt and the .NET 10 BCL primitives; we sit on top of them. Distributed single-use-jti enforcement available via the companion PostQuantum.AspNetCore.RedisReplayCache package. Preview release — the API surface is what we expect to ship in 1.0; the cryptographic construction is not yet independently audited. See KNOWN-GAPS.md before depending on this for anything that matters.</Description>
+    <Description>The high-level ASP.NET Core integration for post-quantum JWT authentication. Add one line — AddPostQuantumJwtBearer() — and hybrid ML-DSA-65 + X-Wing tokens authenticate through the standard ASP.NET Core pipeline exactly the way AddJwtBearer always has: same AuthenticationBuilder, same [Authorize], same ClaimsPrincipal. Fail-closed by construction, AOT-compatible, observable via System.Diagnostics (Metrics + ActivitySource). This is the application-layer wiring (handler, options, four event hooks, JWKS-equivalent key ring, hosted-service warmup) — NOT a cryptography library. The actual ML-DSA / X-Wing / AES-GCM work happens in PostQuantum.Jwt and the .NET 10 BCL primitives; we sit on top of them. Distributed single-use-jti enforcement available via the companion PostQuantum.AspNetCore.RedisReplayCache package. Production-quality integration for controlled issuer/verifier systems — environments where the same team owns both token issuing and validation. NOT independently audited (a permanent, documented limitation of the underlying construction — see KNOWN-GAPS.md) and not a drop-in OAuth/OIDC replacement; tokens use non-IANA algorithm identifiers and do not validate in generic JWT tooling.</Description>
     <PackageProjectUrl>https://github.com/systemslibrarian/postquantum-aspnetcore</PackageProjectUrl>
     <RepositoryUrl>https://github.com/systemslibrarian/postquantum-aspnetcore</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>jwt;jose;authentication;jwtbearer;aspnetcore;post-quantum;pqc;ml-dsa;ml-kem;x-wing;hybrid;quantum-resistant;net10</PackageTags>
-    <PackageReleaseNotes>1.0.0-preview.3: Suite-reconciliation + integration-hardening release. (1) Suite version reconciliation — PostQuantum.Jwt engine dependency moves to 1.0.0-preview.1 to align with the wider PostQuantum.* ecosystem; no source-level API change vs 1.0.0-preview.2. (2) Trust-root documentation — SECURITY.md gains an explicit "Trust root: the HTTP key directory" section telling operators that the HTTPS key-directory endpoint is the root of trust for token validation and SHOULD be protected with certificate pinning or a hardened HttpClient. (3) AddPostQuantumJwtKeyRing(...) gains an optional configureHttpClient hook so wiring a pinned HttpMessageHandler is the obvious path, not a fork. (4) Bounded key-directory response — the DI helper now caps the typed HttpClient at MaxResponseContentBufferSize=1MB; manual constructors get an optional maxResponseBytes parameter (default unchanged). (5) Unknown-kid flood mitigation — Resolve now short-circuits via a bounded short-TTL negative cache before the sync-over-async bridge; a kid which becomes valid is wrongly rejected for at most 10 seconds, matching the pre-existing forced-refresh throttle (no regression to that bound). No change to fail-closed behaviour, no change to the single-suite policy. Full suite green. See KNOWN-GAPS.md and VERSION-RECONCILIATION.md. Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>1.0.0: First stable release. The public API surface is unchanged from 1.0.0-preview.3 (enforced by package baseline validation); SemVer applies from here — PATCH for fixes, MINOR for additive surface, MAJOR for any break. The PostQuantum.Jwt engine dependency moves to its stable 1.0.0. Graduating from preview does NOT add an audit: the underlying cryptographic construction remains not independently audited — at 1.0 that is reframed from a pending gate to a permanent, documented limitation (matching the engine's 1.0.0), because an unfunded project is unlikely to secure a formal review and perpetual preview served no one. Appropriate for controlled issuer/verifier systems where you own both sides and accept that documented risk; see KNOWN-GAPS.md and SECURITY.md. Full notes: https://github.com/systemslibrarian/postquantum-aspnetcore/blob/main/CHANGELOG.md.</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Copyright>Copyright © Paul Clark</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
@@ -41,11 +41,14 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <EnablePackageValidation>true</EnablePackageValidation>
-    <!-- API-surface baseline check. Opt-in via `-p:EnableBaselineValidation=true`
-         once 0.1.0-preview.1 is on nuget.org; until then the pack would fail
-         because the baseline package can't be resolved. Local builds and the
-         default CI runs deliberately leave this off. -->
-    <PackageValidationBaselineVersion Condition="'$(EnableBaselineValidation)' == 'true'">0.1.0-preview.1</PackageValidationBaselineVersion>
+    <!-- API-surface baseline check, ON by default from 1.0.0: every pack
+         compares the public API against the last published version and fails
+         on an accidental break. (The old 0.1.0-preview.1 baseline was never
+         published, so this used to be opt-in; 1.0.0-preview.3 is live and
+         resolvable.) Bump to the newest published version at each release.
+         Requires nuget.org access at pack time; override with
+         -p:PackageValidationBaselineVersion= only if packing fully offline. -->
+    <PackageValidationBaselineVersion>1.0.0-preview.3</PackageValidationBaselineVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -54,7 +57,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="PostQuantum.Jwt" Version="1.0.0-preview.1" />
+    <PackageReference Include="PostQuantum.Jwt" Version="1.0.0" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 

@@ -5,13 +5,15 @@ do, what is unverified, and where the sharp edges are. Honesty over polish:
 if something is incomplete, it is listed here rather than glossed over. This
 file is part of the contract with anyone evaluating the package.
 
-Last reviewed for: `1.0.0-preview.3`.
+Last reviewed for: `1.0.0`.
 
 ## Inherited from `PostQuantum.Jwt`
 
 Every gap in the engine library applies here too. The most important ones:
 
-- **No external audit** of the cryptographic construction.
+- **No external audit** of the cryptographic construction — at `1.0.0` this
+  is a **permanent, documented limitation**, not a pending gate (see
+  `SECURITY.md` for the reasoning).
 - **X-Wing encapsulation is not KAT-validated** (the BCL `MLKem.Encapsulate`
   exposes no derandomized entry point); decapsulation + the SHA3-256
   combiner are validated against the official IETF vectors.
@@ -108,10 +110,15 @@ for the full list.
   GitHub build-provenance attestations for the `.nupkg` and the SBOM —
   verify with
   `gh attestation verify <file> --repo systemslibrarian/postquantum-aspnetcore`.
-- **API baseline is opt-in.** `EnablePackageValidation` is on; the
-  baseline comparison against `0.1.0-preview.1` is gated behind
-  `-p:EnableBaselineValidation=true` until that version lands on
-  nuget.org and the baseline package is resolvable.
+  (CI publishing itself uses NuGet Trusted Publishing / OIDC — no
+  long-lived API key exists for the pipeline.)
+- **API baseline validation requires nuget.org access at pack time.**
+  From `1.0.0`, `PackageValidationBaselineVersion` is on by default and
+  compares every pack against the last published version (the old
+  `0.1.0-preview.1` baseline was never published, so this check used to
+  be opt-in and effectively dormant). The cost: a fully offline `dotnet
+  pack` needs `-p:PackageValidationBaselineVersion=` to skip it. The
+  baseline is bumped manually at each release.
 
 ---
 

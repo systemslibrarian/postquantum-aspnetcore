@@ -11,17 +11,17 @@
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <PackageId>PostQuantum.AspNetCore.RedisReplayCache</PackageId>
-    <Version>1.0.0-preview.3</Version>
+    <Version>1.0.0</Version>
     <Title>PostQuantum.AspNetCore.RedisReplayCache — Redis-backed jti replay cache for PostQuantum.Jwt</Title>
     <Authors>Paul Clark</Authors>
-    <Description>A Redis-backed implementation of PostQuantum.Jwt's IPqJwtReplayCache, intended for horizontally-scaled deployments of PostQuantum.AspNetCore. Uses StackExchange.Redis SET NX with TTL = remaining token lifetime, so single-use jti enforcement coordinates across all instances. Companion to PostQuantum.AspNetCore. Preview release — not for production use.</Description>
+    <Description>A Redis-backed implementation of PostQuantum.Jwt's IPqJwtReplayCache, intended for horizontally-scaled deployments of PostQuantum.AspNetCore. Uses StackExchange.Redis SET NX with TTL = remaining token lifetime, so single-use jti enforcement coordinates across all instances. Companion to PostQuantum.AspNetCore, released in lockstep with it. Production-quality for controlled issuer/verifier systems; the underlying construction is NOT independently audited (a permanent, documented limitation — see the repository's KNOWN-GAPS.md).</Description>
     <PackageProjectUrl>https://github.com/systemslibrarian/postquantum-aspnetcore</PackageProjectUrl>
     <RepositoryUrl>https://github.com/systemslibrarian/postquantum-aspnetcore</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>jwt;post-quantum;pqc;ml-dsa;replay-cache;redis;jti;aspnetcore;net10</PackageTags>
-    <PackageReleaseNotes>0.7.0-preview.1: Initial reference implementation. RedisPqJwtReplayCache + AddPostQuantumJwtRedisReplayCache(...) DI helper. Uses SET NX with TTL for single-use jti across a cluster.</PackageReleaseNotes>
+    <PackageReleaseNotes>1.0.0: First stable release, in lockstep with PostQuantum.AspNetCore 1.0.0. API unchanged from 1.0.0-preview.3. RedisPqJwtReplayCache + AddPostQuantumJwtRedisReplayCache(...) DI helper; SET NX with TTL = remaining token lifetime for single-use jti across a cluster. SemVer applies from here. Not independently audited — see the repository's KNOWN-GAPS.md.</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Copyright>Copyright © Paul Clark</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
@@ -33,6 +33,9 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <EnablePackageValidation>true</EnablePackageValidation>
+    <!-- Same baseline discipline as the main package: compare against the
+         last published version on every pack. Bump at each release. -->
+    <PackageValidationBaselineVersion>1.0.0-preview.3</PackageValidationBaselineVersion>
   </PropertyGroup>
 
   <ItemGroup>

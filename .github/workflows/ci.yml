@@ -131,6 +131,30 @@ jobs:
       - name: Build (Release)
         run: dotnet build -c Release --no-restore
 
+      # Diagnostic: show exactly what the runtime will see before the suite
+      # runs. If the zero-skip gate below ever trips, this step answers the
+      # first two questions — did conda actually provide a libcrypto the
+      # runtime can load (soname), and does a bare .NET process see ML-DSA
+      # under the same LD_LIBRARY_PATH the tests get?
+      - name: Probe ML-DSA availability under the conda OpenSSL
+        run: |
+          set -euo pipefail
+          echo "== sonames in $PQ_OPENSSL_LIB =="
+          ls -1 "$PQ_OPENSSL_LIB" | grep -E '^lib(crypto|ssl)\.so' || true
+          echo "== dotnet =="
+          dotnet --version
+          mkdir -p /tmp/pqprobe && cd /tmp/pqprobe
+          cat > pqprobe.cs <<'EOF'
+          using System.Security.Cryptography;
+          Console.WriteLine($"MLDsa.IsSupported = {MLDsa.IsSupported}");
+          Console.WriteLine($"MLKem.IsSupported = {MLKem.IsSupported}");
+          EOF
+          echo "== probe with conda LD_LIBRARY_PATH =="
+          LD_LIBRARY_PATH="$PQ_OPENSSL_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+            dotnet run pqprobe.cs
+          echo "== probe with system OpenSSL only =="
+          dotnet run pqprobe.cs
+
       - name: Test (Release) with PQ-capable OpenSSL on LD_LIBRARY_PATH
         run: |
           set -o pipefail

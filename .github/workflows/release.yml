@@ -126,7 +126,7 @@ jobs:
           subject-path: "artifacts/bom.json"
 
       - name: Upload artifacts to the workflow run
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: nuget-package
           path: |

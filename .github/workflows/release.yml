@@ -77,6 +77,27 @@ jobs:
           fi
           echo "package_version=$csproj_version" >> "$GITHUB_OUTPUT"
 
+          # Every 'dotnet add package … --version X.Y.Z' snippet in tracked Markdown must pin the
+          # version being released. Without this the gate only proves the two csproj files agree
+          # with each other and with the tag -- it says nothing about what the docs tell people to
+          # install. docs/GETTING-STARTED.md sat on 0.8.0-preview.1 from before 1.0.0 through to
+          # 1.1.0 because nothing checked it. Historical mentions in CHANGELOG.md are excluded:
+          # those are facts about earlier releases, not instructions.
+          snippet_fail=0
+          while IFS= read -r hit; do
+            file="${hit%%:*}"
+            pinned="$(printf '%s' "$hit" | grep -oP -- '--version \K[0-9][0-9A-Za-z.-]*')"
+            if [ "$pinned" != "$csproj_version" ]; then
+              echo "::error file=$file::install snippet pins '--version $pinned' but this release is '$csproj_version'"
+              snippet_fail=1
+            fi
+          done < <(git grep -nP -- '--version [0-9]' -- '*.md' ':!CHANGELOG.md' || true)
+          if [ "$snippet_fail" -ne 0 ]; then
+            echo "Documentation drift: sweep install snippets to ${csproj_version} before releasing." >&2
+            exit 1
+          fi
+          echo "Install snippets all pin ${csproj_version}."
+
       - name: Install CycloneDX SBOM tool
         run: dotnet tool install --global CycloneDX
 

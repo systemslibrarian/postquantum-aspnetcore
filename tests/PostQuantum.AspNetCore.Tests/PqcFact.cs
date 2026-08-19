@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 
 namespace PostQuantum.AspNetCore.Tests;
@@ -10,7 +11,10 @@ namespace PostQuantum.AspNetCore.Tests;
 /// </summary>
 public sealed class PqcFactAttribute : FactAttribute
 {
-    public PqcFactAttribute()
+    public PqcFactAttribute(
+        [CallerFilePath] string? sourceFilePath = null,
+        [CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (!MLDsa.IsSupported)
         {

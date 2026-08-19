@@ -10,6 +10,25 @@ from the stable `1.0.0` onward. Pre-`1.0.0` releases (`0.x` and
 
 _No changes yet._
 
+## [1.1.0] — 2026-08-19
+
+Dependency maintenance. No public API change and no behavioural change; a drop-in over 1.0.0.
+
+### Changed
+
+- **`StackExchange.Redis` 2.8.16 → 3.1.13** in `PostQuantum.AspNetCore.RedisReplayCache`. Minor
+  rather than patch because this raises that package's published dependency floor across a major
+  version — a consumer of `.RedisReplayCache` now resolves the 3.x line. `PostQuantum.AspNetCore`
+  itself is unaffected.
+- Test and CI toolchain updated — `NSubstitute` 6.2.0, `SharpFuzz` 2.3.0, `BenchmarkDotNet`
+  0.15.8, `Microsoft.SourceLink.GitHub` 10.0.400, and the GitHub Actions used by CI and release.
+  None of these reach a published package.
+
+### Fixed
+
+- The `docs/GETTING-STARTED.md` install snippet still pinned `0.8.0-preview.1`, three releases
+  behind. It now tracks the current version.
+
 ## [1.0.0] — 2026-07-05
 
 **First stable release**, in lockstep with the companion

@@ -88,14 +88,18 @@ jobs:
           #       skipped: 47
           # `|| true` on each grep matters: a clean run with no skips still prints "skipped: 0",
           # but a shape change upstream must not abort the step silently under `set -e`.
-          if ! grep -q 'Test run summary' test-output.log; then
+          # The runner emits ANSI colour, so summary lines arrive as $'\033[m  skipped: 0'.
+          # Anchoring on start-of-line therefore never matches and the counts come back empty —
+          # strip the escapes first and parse the plain text.
+          plain=$(sed $'s/\033\[[0-9;]*m//g' test-output.log)
+          if ! printf '%s' "$plain" | grep -q 'Test run summary'; then
             echo "::error::Could not locate a test run summary — the suite did not run."
             exit 1
           fi
           echo "Test summary:"
-          grep -A6 'Test run summary' test-output.log || true
-          total_run=$(grep -oE '^[[:space:]]*total:[[:space:]]*[0-9]+' test-output.log | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}' || true)
-          total_skipped=$(grep -oE '^[[:space:]]*skipped:[[:space:]]*[0-9]+' test-output.log | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}' || true)
+          printf '%s' "$plain" | grep -A6 'Test run summary' || true
+          total_run=$(printf '%s' "$plain" | grep -oE '^[[:space:]]*total:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}' || true)
+          total_skipped=$(printf '%s' "$plain" | grep -oE '^[[:space:]]*skipped:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}' || true)
           if [[ "${total_run:-0}" -eq 0 ]]; then
             echo "::error::Summary reports zero tests — the suite did not run."
             exit 1
@@ -186,14 +190,18 @@ jobs:
           #       skipped: 47
           # `|| true` on each grep matters: a clean run with no skips still prints "skipped: 0",
           # but a shape change upstream must not abort the step silently under `set -e`.
-          if ! grep -q 'Test run summary' test-output.log; then
+          # The runner emits ANSI colour, so summary lines arrive as $'\033[m  skipped: 0'.
+          # Anchoring on start-of-line therefore never matches and the counts come back empty —
+          # strip the escapes first and parse the plain text.
+          plain=$(sed $'s/\033\[[0-9;]*m//g' test-output.log)
+          if ! printf '%s' "$plain" | grep -q 'Test run summary'; then
             echo "::error::Could not locate a test run summary — the suite did not run."
             exit 1
           fi
           echo "Test summary:"
-          grep -A6 'Test run summary' test-output.log || true
-          total_run=$(grep -oE '^[[:space:]]*total:[[:space:]]*[0-9]+' test-output.log | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}' || true)
-          total_skipped=$(grep -oE '^[[:space:]]*skipped:[[:space:]]*[0-9]+' test-output.log | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}' || true)
+          printf '%s' "$plain" | grep -A6 'Test run summary' || true
+          total_run=$(printf '%s' "$plain" | grep -oE '^[[:space:]]*total:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}' || true)
+          total_skipped=$(printf '%s' "$plain" | grep -oE '^[[:space:]]*skipped:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}' || true)
           if [[ "${total_run:-0}" -eq 0 ]]; then
             echo "::error::Summary reports zero tests — the suite did not run."
             exit 1

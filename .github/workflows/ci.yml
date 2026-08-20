@@ -67,7 +67,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          dotnet test -c Release --no-build --logger "console;verbosity=minimal" | tee test-output.log
+          dotnet test -c Release --no-build | tee test-output.log
 
       # On Windows the runner has the native ML-KEM / ML-DSA primitives, so
       # every PqcFact test MUST run. If anything skipped, we are no longer
@@ -81,18 +81,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          summaries=$(grep -E '^(Passed!|Failed!)' test-output.log || true)
-          if [[ -z "$summaries" ]]; then
-            echo "::error::Could not locate any dotnet test summary line."
+          # Microsoft.Testing.Platform (xunit.v3 4.0) prints a different summary to VSTest's
+          # one-line "Passed!  - Failed: 0, Skipped: 0, ...". It is multi-line and lower-case:
+          #     Test run summary: Passed!
+          #       total: 74
+          #       skipped: 47
+          # `|| true` on each grep matters: a clean run with no skips still prints "skipped: 0",
+          # but a shape change upstream must not abort the step silently under `set -e`.
+          # The runner emits ANSI colour, so summary lines arrive as $'\033[m  skipped: 0'.
+          # Anchoring on start-of-line therefore never matches and the counts come back empty —
+          # strip the escapes first and parse the plain text.
+          plain=$(sed $'s/\033\[[0-9;]*m//g' test-output.log)
+          if ! printf '%s' "$plain" | grep -q 'Test run summary'; then
+            echo "::error::Could not locate a test run summary — the suite did not run."
             exit 1
           fi
-          echo "Test summary lines:"
-          echo "$summaries"
-          total_skipped=0
-          while IFS= read -r line; do
-            s=$(echo "$line" | grep -oE 'Skipped:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1)
-            total_skipped=$((total_skipped + ${s:-0}))
-          done <<< "$summaries"
+          echo "Test summary:"
+          printf '%s' "$plain" | grep -A6 'Test run summary' || true
+          total_run=$(printf '%s' "$plain" | grep -oE '^[[:space:]]*total:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}' || true)
+          total_skipped=$(printf '%s' "$plain" | grep -oE '^[[:space:]]*skipped:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}' || true)
+          if [[ "${total_run:-0}" -eq 0 ]]; then
+            echo "::error::Summary reports zero tests — the suite did not run."
+            exit 1
+          fi
           if [[ "$total_skipped" -ne 0 ]]; then
             echo "::error::Windows CI lane is the PQ-required lane; $total_skipped test(s) skipped."
             echo "This usually means the ML-KEM/ML-DSA primitives weren't available to the runner."
@@ -164,7 +175,7 @@ jobs:
         run: |
           set -o pipefail
           LD_LIBRARY_PATH="$PQ_OPENSSL_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-            dotnet test -c Release --no-build --logger "console;verbosity=minimal" \
+            dotnet test -c Release --no-build \
             | tee test-output.log
 
       # Sums Skipped across every per-project summary line — see the Windows
@@ -172,18 +183,29 @@ jobs:
       - name: Require zero skipped tests on Linux (PQ paths must run)
         run: |
           set -euo pipefail
-          summaries=$(grep -E '^(Passed!|Failed!)' test-output.log || true)
-          if [[ -z "$summaries" ]]; then
-            echo "::error::Could not locate any dotnet test summary line."
+          # Microsoft.Testing.Platform (xunit.v3 4.0) prints a different summary to VSTest's
+          # one-line "Passed!  - Failed: 0, Skipped: 0, ...". It is multi-line and lower-case:
+          #     Test run summary: Passed!
+          #       total: 74
+          #       skipped: 47
+          # `|| true` on each grep matters: a clean run with no skips still prints "skipped: 0",
+          # but a shape change upstream must not abort the step silently under `set -e`.
+          # The runner emits ANSI colour, so summary lines arrive as $'\033[m  skipped: 0'.
+          # Anchoring on start-of-line therefore never matches and the counts come back empty —
+          # strip the escapes first and parse the plain text.
+          plain=$(sed $'s/\033\[[0-9;]*m//g' test-output.log)
+          if ! printf '%s' "$plain" | grep -q 'Test run summary'; then
+            echo "::error::Could not locate a test run summary — the suite did not run."
             exit 1
           fi
-          echo "Test summary lines:"
-          echo "$summaries"
-          total_skipped=0
-          while IFS= read -r line; do
-            s=$(echo "$line" | grep -oE 'Skipped:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | tail -1)
-            total_skipped=$((total_skipped + ${s:-0}))
-          done <<< "$summaries"
+          echo "Test summary:"
+          printf '%s' "$plain" | grep -A6 'Test run summary' || true
+          total_run=$(printf '%s' "$plain" | grep -oE '^[[:space:]]*total:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}' || true)
+          total_skipped=$(printf '%s' "$plain" | grep -oE '^[[:space:]]*skipped:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}' || true)
+          if [[ "${total_run:-0}" -eq 0 ]]; then
+            echo "::error::Summary reports zero tests — the suite did not run."
+            exit 1
+          fi
           if [[ "$total_skipped" -ne 0 ]]; then
             echo "::error::Linux PQ-required lane: $total_skipped test(s) skipped — OpenSSL 3.5+ (below 4.x, see the conda pin) should make ML-KEM/ML-DSA available."
             exit 1
@@ -267,16 +289,17 @@ jobs:
       - name: Test with coverage
         run: |
           set -o pipefail
+          # MTP does not accept VSTest's --collect/--results-directory. Coverage comes from
+          # Microsoft.Testing.Extensions.CodeCoverage, configured after the `--` separator.
+          rm -rf coverage
           dotnet test tests/PostQuantum.AspNetCore.Tests/PostQuantum.AspNetCore.Tests.csproj \
             -c Release \
-            --collect:"XPlat Code Coverage" \
-            --results-directory coverage \
-            --logger "console;verbosity=minimal"
+            -- --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
 
       - name: Generate coverage report and enforce threshold
         run: |
           set -euo pipefail
-          report=$(find coverage -name 'coverage.cobertura.xml' | head -1)
+          report=$(find . -name 'coverage.cobertura.xml' -not -path '*/obj/*' | head -1)
           if [[ -z "$report" ]]; then
             echo "::error::No coverage report found."
             exit 1

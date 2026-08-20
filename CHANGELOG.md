@@ -8,6 +8,20 @@ from the stable `1.0.0` onward. Pre-`1.0.0` releases (`0.x` and
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-08-20
+
+Patch: test-platform migration and CI hardening. No public API change and no behavioural change; a drop-in over 1.1.0.
+
+### Changed
+
+- **Test run migrated to Microsoft.Testing.Platform.** `xunit.v3` 4.0.0 routes through MTP, whose
+  VSTest bridge the .NET 10 SDK no longer supports. `global.json` now opts into the new
+  `dotnet test` experience, coverage comes from `Microsoft.Testing.Extensions.CodeCoverage`, and
+  `PqcFactAttribute` gained the source-information constructor xUnit3003 requires.
+- **The release gate now checks install snippets**, not just project versions. It previously
+  verified the two csproj files against each other and the tag but never looked at documentation —
+  `docs/GETTING-STARTED.md` had pinned `0.8.0-preview.1` since before 1.0.0 as a result.
+
 _No changes yet._
 
 ## [1.1.0] — 2026-08-19

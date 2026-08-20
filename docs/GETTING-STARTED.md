@@ -36,7 +36,7 @@ cd MyPqApi
 ## Step 2 — Install the package
 
 ```bash
-dotnet add package PostQuantum.AspNetCore --version 1.1.0
+dotnet add package PostQuantum.AspNetCore --version 1.1.1
 ```
 
 That transitively pulls in `PostQuantum.Jwt`. No other packages are

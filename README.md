@@ -195,7 +195,7 @@ nothing else.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.AspNetCore --version 1.1.0
+dotnet add package PostQuantum.AspNetCore --version 1.1.1
 ```
 
 Or in a `.csproj`:
@@ -399,7 +399,7 @@ companion package ships a Redis implementation that's a one-line
 wireup:
 
 ```bash
-dotnet add package PostQuantum.AspNetCore.RedisReplayCache --version 1.1.0
+dotnet add package PostQuantum.AspNetCore.RedisReplayCache --version 1.1.1
 ```
 
 ```csharp

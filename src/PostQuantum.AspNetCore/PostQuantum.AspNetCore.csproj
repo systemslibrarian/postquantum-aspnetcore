@@ -57,7 +57,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="PostQuantum.Jwt" Version="1.0.0" />
+    <PackageReference Include="PostQuantum.Jwt" Version="1.0.1" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.400" PrivateAssets="All" />
   </ItemGroup>
 
